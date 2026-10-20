@@ -1,0 +1,212 @@
+# Daikin Altherma 3 R ECH2O (EHSX04P50EF + ERGA04EV) on an ESP32 with relay board.
+# X10A: ESP RX <- X10A pin 2 (TX), ESP TX -> X10A pin 3 (RX), GND <- X10A pin 5. See README.
+#
+# Relay pins are placeholders: check them on the board before wiring anything.
+
+substitutions:
+  name: altherma
+  x10a_rx: GPIO16
+  x10a_tx: GPIO17
+  relay_heat: GPIO32  # COM + normally closed -> X12M 15 (H): relay off = heat request
+  relay_cool: GPIO33  # COM + normally open   -> X12M 16 (C): relay on  = cool request
+  relay_sg1: GPIO25   # X15M 3-4, Smart Grid contact 1 ([D-01]=3)
+  relay_sg2: GPIO26   # X15M 5-6, Smart Grid contact 2
+
+esphome:
+  name: ${name}
+  friendly_name: Altherma
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+logger:
+  # The X10A uses UART2; keep the log on UART0 (USB)
+  level: DEBUG
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap: {}
+
+# Local dashboard on http://altherma.local, works without Home Assistant
+web_server:
+  version: 3
+  port: 80
+  local: true
+  sorting_groups:
+    - id: grp_temp
+      name: Temperaturen
+      sorting_weight: 10
+    - id: grp_state
+      name: Zustand
+      sorting_weight: 20
+    - id: grp_control
+      name: Steuerung
+      sorting_weight: 30
+
+uart:
+  id: x10a_uart
+  rx_pin: ${x10a_rx}
+  tx_pin: ${x10a_tx}
+  baud_rate: 9600
+  parity: EVEN
+  stop_bits: 1
+  data_bits: 8
+
+daikin_x10a:
+  id: altherma
+  uart_id: x10a_uart
+  model: "ERGA E EHSH-X P30-50 E_EF series 04-08kW-ECH2O"
+  update_interval: 30s
+  # true logs every reply as hex, for comparing with ESPAltherma
+  log_raw: false
+
+sensor:
+  - platform: daikin_x10a
+    label: "Indoor ambient temp. (R1T)"
+    name: Raumtemperatur Madoka
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "RT setpoint"
+    name: Raum Soll
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "R1T-Outdoor air temp."
+    name: Außentemperatur
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "Leaving water temp. before BUH (R1T)"
+    name: Vorlauf (R1T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "Leaving water temp. after BUH (R2T)"
+    name: Vorlauf (R2T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "Inlet water temp.(R4T)"
+    name: Rücklauf (R4T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "DHW tank temp. (R5T)"
+    name: Speicher (R5T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "LW setpoint (main)"
+    name: Vorlauf Soll
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "DHW setpoint"
+    name: Warmwasser Soll
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "Flow sensor (l/min)"
+    name: Durchfluss
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "INV frequency (rps)"
+    name: Verdichter
+    accuracy_decimals: 0
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "RT Control State (0:thermo off 1:thermo on 2:buffering)"
+    name: Raumregler Zustand
+    accuracy_decimals: 0
+    web_server: {sorting_group_id: grp_state}
+
+binary_sensor:
+  - platform: daikin_x10a
+    label: "Thermostat ON/OFF"
+    register: 0x60
+    name: Thermostat an
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "3way valve(On:DHW_Off:Space)"
+    name: Warmwasserventil
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Water pump operation"
+    name: Umwälzpumpe
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Defrost Operation"
+    name: Abtauen
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Main RT Heating"
+    name: Thermostateingang Heizen
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "SmartGridContact1"
+    name: SG-Kontakt 1
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "SmartGridContact2"
+    name: SG-Kontakt 2
+    web_server: {sorting_group_id: grp_state}
+  - platform: template
+    name: X10A verbunden
+    lambda: return id(altherma).is_connected();
+    entity_category: diagnostic
+    web_server: {sorting_group_id: grp_state}
+
+text_sensor:
+  - platform: daikin_x10a
+    label: "I/U operation mode"
+    name: Betriebsart
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Error Code"
+    register: 0x60
+    name: Fehlercode
+    web_server: {sorting_group_id: grp_state}
+
+# --- Relays (stage 3). Nothing is wired yet: keep this commented until the electrician is done. ---
+#
+# switch:
+#   # On = heat request. The relay is wired normally closed, so it is energised to REMOVE the request:
+#   # a dead ESP keeps heating.
+#   - platform: gpio
+#     id: heat_request
+#     name: Heizanforderung
+#     pin: {number: ${relay_heat}, inverted: true}
+#     restore_mode: ALWAYS_ON
+#     interlock: [cool_request]
+#     web_server: {sorting_group_id: grp_control}
+#   - platform: gpio
+#     id: cool_request
+#     name: Kühlanforderung
+#     pin: ${relay_cool}
+#     restore_mode: ALWAYS_OFF
+#     interlock: [heat_request]
+#     web_server: {sorting_group_id: grp_control}
+#
+# select:
+#   - platform: template
+#     name: Smart Grid
+#     options: [Normal, Einschaltempfehlung, Sperre, Zwangs-EIN]
+#     initial_option: Normal
+#     restore_value: false
+#     optimistic: true
+#     on_value:
+#       - lambda: |-
+#           // contact 1 (3-4) / contact 2 (5-6): 00 normal, 01 recommended on, 10 blocked, 11 forced on
+#           bool c1 = i == 2 || i == 3, c2 = i == 1 || i == 3;
+#           id(sg1).write_state(c1);
+#           id(sg2).write_state(c2);
+#     web_server: {sorting_group_id: grp_control}
+#
+# output:
+#   - {platform: gpio, id: sg1, pin: ${relay_sg1}}
+#   - {platform: gpio, id: sg2, pin: ${relay_sg2}}

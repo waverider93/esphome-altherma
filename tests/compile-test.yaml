@@ -1,0 +1,36 @@
+# Builds the component without network components (no downloads from the Espressif registry needed).
+esphome:
+  name: x10a-test
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source: {type: local, path: ../components}
+
+logger:
+
+uart:
+  id: x10a_uart
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+  parity: EVEN
+
+daikin_x10a:
+  id: altherma
+  model: "ERGA E EHSH-X P30-50 E_EF series 04-08kW-ECH2O"
+  log_raw: true
+
+sensor:
+  - {platform: daikin_x10a, label: "Indoor ambient temp. (R1T)", name: Raum}
+  - {platform: daikin_x10a, label: "High Pressure(T)", name: HD Temp}
+  - {platform: daikin_x10a, register: 0x62, offset: 9, conversion: 105, data_size: 2, name: Durchfluss roh}
+binary_sensor:
+  - {platform: daikin_x10a, label: "Water pump operation", name: Pumpe}
+  - {platform: template, name: Verbunden, lambda: "return id(altherma).is_connected();"}
+text_sensor:
+  - {platform: daikin_x10a, label: "I/U operation mode", name: Modus}
+  - {platform: daikin_x10a, label: "Error Code", register: 0x60, name: Fehler}
