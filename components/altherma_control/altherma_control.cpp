@@ -126,6 +126,32 @@ void AlthermaControl::publish_settings_() {
 #endif
 }
 
+std::string AlthermaControl::json() const {
+  const Params &p = this->model_.params;
+  const State &st = this->model_.state;
+  auto num = [](float v) {
+    char b[16];
+    if (std::isnan(v))
+      return std::string("null");
+    snprintf(b, sizeof(b), "%.2f", v);
+    return std::string(b);
+  };
+  std::string s = "{\"active\":";
+  s += this->active_ ? "true" : "false";
+  s += ",\"request\":";
+  s += this->heat_request_ != nullptr && this->heat_request_->state ? "true" : "false";
+  s += ",\"reason\":\"";
+  s += this->model_.reason;  // fixed English texts without quotes
+  s += "\",\"deficit\":" + num(st.deficit_kwh) + ",\"start\":" + num(p.start_kwh) + ",\"stop\":" + num(p.stop_kwh);
+  s += ",\"min_run\":" + num(p.min_run_h) + ",\"min_pause\":" + num(p.min_pause_h);
+  s += ",\"room_gain\":" + num(p.room_gain_kwh_k) + ",\"ua\":" + num(st.ua_w_k);
+  s += ",\"calibrations\":" + std::to_string(st.calibrations);
+  s += ",\"calibration_left\":" + num(this->model_.calibration_left_h());
+  s += ",\"loss\":" + num(this->model_.loss_kw) + ",\"heat\":" + num(this->model_.heat_kw);
+  s += ",\"room_low\":" + num(p.room_low_k) + ",\"room_high\":" + num(p.room_high_k) + "}";
+  return s;
+}
+
 void AlthermaControl::update() {
   uint32_t now = millis();
   float dt_h = (now - this->last_step_) / 3600000.0f;

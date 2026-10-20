@@ -1,0 +1,43 @@
+# Home Assistant dashboard card for the controller (examples/altherma-ech2o.yaml, device name "altherma").
+# Paste into a dashboard: Edit dashboard > Add card > Manual. Entity ids follow the names in the example.
+type: vertical-stack
+cards:
+  - type: markdown
+    content: |
+      ## Regelung der Wärmepumpe
+      Der **ESP** schaltet die Heizanforderung selbst, auch ohne Home Assistant. Hier siehst du, was er tut,
+      und kannst die Einstellungen ändern.
+
+      - **Defizit**: Wärme, die dem Haus fehlt (kWh). Wächst mit dem Wärmeverlust UA × (Raum − Außen),
+        sinkt mit der gelieferten Heizwärme. Warmwasser zählt nicht.
+      - **Start** ab {{ states('number.altherma_regler_start') }} kWh nach mindestens
+        {{ states('number.altherma_regler_mindestpause') }} h Pause, **Stopp** bei
+        {{ states('number.altherma_regler_stopp') }} kWh nach mindestens
+        {{ states('number.altherma_regler_mindestlaufzeit') }} h Lauf. Das verhindert das Takten.
+      - **Raumkorrektur**: Das Defizit wird langsam zu
+        {{ states('number.altherma_regler_raumkorrektur') }} kWh je Kelvin unter Soll gezogen.
+        Raum 0,5 K unter Soll: sofort an, 1 K über Soll: sofort aus.
+      - **UA** lernt sich alle 72 h selbst und bleibt auch nach einem Stromausfall erhalten.
+      - Ohne Werte von der WP oder ohne ESP fährt die WP nach ihrer Heizkurve.
+
+      Zeichnung und Erklärung auch direkt am ESP: http://altherma.local/altherma/
+  - type: entities
+    title: Zustand
+    entities:
+      - entity: select.altherma_regelung
+      - entity: switch.altherma_heizanforderung
+      - entity: sensor.altherma_regler_grund
+      - entity: sensor.altherma_regler_defizit
+      - entity: sensor.altherma_regler_warmeverlust
+      - entity: sensor.altherma_regler_heizleistung
+      - entity: sensor.altherma_regler_ua_gelernt
+      - entity: sensor.altherma_regler_nachste_kalibrierung
+  - type: entities
+    title: Einstellungen
+    entities:
+      - entity: number.altherma_regler_start
+      - entity: number.altherma_regler_stopp
+      - entity: number.altherma_regler_mindestlaufzeit
+      - entity: number.altherma_regler_mindestpause
+      - entity: number.altherma_regler_raumkorrektur
+      - entity: number.altherma_regler_ua

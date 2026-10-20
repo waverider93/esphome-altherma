@@ -2,6 +2,7 @@
 // Reads a Daikin Altherma over its X10A serial port.
 // Protocol, model detection and layout correction after ESPAltherma (MIT License, Copyright (c) 2020 Raomin).
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -86,6 +87,8 @@ class DaikinX10A : public PollingComponent, public uart::UARTDevice {
 #ifdef USE_DAIKIN_X10A_DIAGRAM
   void set_web_server_base(web_server_base::WebServerBase *base) { this->base_ = base; }
 #endif
+  // Extra block "control" in the diagram's values.json (altherma_control)
+  void set_control_json(std::function<std::string()> f) { this->control_json_ = std::move(f); }
 
   // True while the last complete poll cycle answered within three update intervals
   bool is_connected() const;
@@ -153,6 +156,7 @@ class DaikinX10A : public PollingComponent, public uart::UARTDevice {
 #ifdef USE_DAIKIN_X10A_DIAGRAM
   web_server_base::WebServerBase *base_{nullptr};
 #endif
+  std::function<std::string()> control_json_;
   Mutex json_lock_;
   std::string json_{"{}"};
 };

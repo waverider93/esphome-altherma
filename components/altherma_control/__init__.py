@@ -26,6 +26,7 @@ CONF_UA = "ua"
 CONF_ROOM_LOW = "room_low"
 CONF_ROOM_HIGH = "room_high"
 CONF_CALIBRATION_WINDOW = "calibration_window"
+CONF_DIAGRAM_ID = "diagram_id"
 
 altherma_control_ns = cg.esphome_ns.namespace("altherma_control")
 AlthermaControl = altherma_control_ns.class_("AlthermaControl", cg.PollingComponent)
@@ -49,6 +50,8 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Optional(CONF_ROOM_LOW, default=0.5): cv.float_range(min=0.1, max=3),
         cv.Optional(CONF_ROOM_HIGH, default=1.0): cv.float_range(min=0.1, max=3),
         cv.Optional(CONF_CALIBRATION_WINDOW, default="72h"): cv.positive_time_period_minutes,
+        # daikin_x10a hub whose diagram page shows the controller with an explanation
+        cv.Optional(CONF_DIAGRAM_ID): cv.use_id(cg.esphome_ns.namespace("daikin_x10a").class_("DaikinX10A")),
     }
 ).extend(cv.polling_component_schema("60s"))
 
@@ -72,3 +75,6 @@ async def to_code(config):
     cg.add(var.set_default_ua(config[CONF_UA]))
     cg.add(var.set_room_limits(config[CONF_ROOM_LOW], config[CONF_ROOM_HIGH]))
     cg.add(var.set_calibration_hours(config[CONF_CALIBRATION_WINDOW].total_minutes / 60.0))
+    if CONF_DIAGRAM_ID in config:
+        hub = await cg.get_variable(config[CONF_DIAGRAM_ID])
+        cg.add(hub.set_control_json(cg.RawExpression(f"[]() -> std::string {{ return {var}->json(); }}")))

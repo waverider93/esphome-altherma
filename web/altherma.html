@@ -46,6 +46,12 @@ main{padding-top:14px;padding-bottom:40px}
 .flags span.on{background:var(--warm);color:#2e2410}
 .status{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:600;margin-top:4px}
 .good{color:var(--ok)}.bad{color:var(--bad)}.attn{color:var(--note)}
+.ctl{margin-top:16px;padding:16px 20px}.ctl h2{font-size:17px;margin:0 0 4px}.ctl .row{display:flex;flex-wrap:wrap;gap:10px 28px;margin:12px 0}
+.ctl .kv b{display:block;font-size:22px}.ctl .kv span{font-size:13px;color:var(--ink2)}
+.ctl .bar{position:relative;height:10px;border-radius:5px;background:var(--line);margin:22px 0 26px}
+.ctl .bar i{position:absolute;top:-4px;width:4px;height:18px;border-radius:2px;background:var(--ink2)}.ctl .bar i.now{background:var(--acc);width:8px;top:-5px;height:20px;border-radius:4px}
+.ctl .bar em{position:absolute;top:16px;font-size:12px;font-style:normal;color:var(--ink2);transform:translateX(-50%);white-space:nowrap}
+.ctl details{margin-top:6px}.ctl summary{cursor:pointer;font-weight:600}.ctl p,.ctl li{font-size:14px;line-height:1.5;color:var(--ink2)}.ctl ul{padding-left:18px}
 details.all{margin-top:16px;padding:4px 20px 10px}
 details.all summary{cursor:pointer;font-weight:700;padding:12px 0;list-style:none}
 details.all summary::-webkit-details-marker{display:none}
@@ -187,6 +193,9 @@ td.n{text-align:right;font-weight:600;padding-right:0}
    <div><div class="k">Health</div><div class="status" id="dErr" translate="no"></div><div class="flags" id="flags" translate="no"></div></div>
   </div>
  </div>
+<section class="ctl card" id="ctl" hidden translate="no"><h2 id="cTitle"></h2><div class="sub" id="cState"></div>
+<div class="row"><div class="kv"><b id="cDef"></b><span id="cDefL"></span></div><div class="kv"><b id="cLoss"></b><span id="cLossL"></span></div><div class="kv"><b id="cHeat"></b><span id="cHeatL"></span></div><div class="kv"><b id="cUa"></b><span id="cUaL"></span></div></div>
+<div class="bar" id="cBar"></div><details><summary id="cHow"></summary><div id="cText"></div></details></section>
  <details class="all card" id="allBox"><summary><span>All readings</span> <span class="sub" id="valAge" translate="no"></span></summary><table><tbody id="dValues" translate="no"></tbody></table></details>
 </main>
 <script>
@@ -345,6 +354,47 @@ function renderReadings() {
 }
 DK.addEventListener('change', paint);
 
+// ---- controller (altherma_control): state and a short explanation
+const CTL = {
+  en: {title: 'Control', active: 'The ESP switches the heat request', passive: 'Home Assistant switches the heat request; the ESP only calculates',
+    on: 'Heat request on', off: 'Heat request off', deficit: 'Deficit (kWh)', loss: 'Heat loss now (kW)', heat: 'Heat delivered now (kW)',
+    ua: 'UA (W/K), {n} calibrations, next in {h} h', how: 'How it works',
+    reasons: {'deficit reached': 'deficit reached', 'deficit covered': 'deficit covered', 'minimum run time': 'minimum run time',
+      'minimum pause': 'minimum pause', 'no demand': 'no demand', 'deficit not covered': 'deficit not yet covered',
+      'room below setpoint': 'room too cold', 'room above setpoint': 'room too warm', 'no room, setpoint or outside temperature': 'no values from the heat pump: heating curve'},
+    text: `<p>The house loses heat all the time; the heat pump delivers it in a few long runs instead of many short ones.</p><ul>
+<li><b>Deficit</b>: heat the house is missing, in kWh. Every minute it grows by the heat loss (UA × (room − outside)) and shrinks by the heat delivered (flow × (leaving − return water)). Hot water does not count.</li>
+<li><b>Start</b> at {start} kWh after a pause of at least {pause} h, <b>stop</b> at {stop} kWh after a run of at least {run} h. That prevents cycling.</li>
+<li><b>Room correction</b>: the deficit is pulled slowly towards {gain} kWh per kelvin below the setpoint, so errors do not add up. Room more than {low} K below the setpoint: on at once; more than {high} K above: off at once.</li>
+<li><b>UA</b> learns itself: every 72 h from the heat delivered, when the room ended as warm as it started. Sun and appliances are inside it on average. Kept in flash, also over a power cut.</li>
+<li>Without values from the heat pump, the heat request stays on and the heat pump follows its heating curve. If the ESP fails, the relay does the same.</li></ul>`},
+  de: {title: 'Regelung', active: 'Der ESP schaltet die Heizanforderung', passive: 'Home Assistant schaltet die Heizanforderung, der ESP rechnet nur mit',
+    on: 'Heizanforderung an', off: 'Heizanforderung aus', deficit: 'Defizit (kWh)', loss: 'Wärmeverlust jetzt (kW)', heat: 'Heizleistung jetzt (kW)',
+    ua: 'UA (W/K), {n} Kalibrierungen, nächste in {h} h', how: 'So funktioniert es',
+    reasons: {'deficit reached': 'Defizit erreicht', 'deficit covered': 'Defizit gedeckt', 'minimum run time': 'Mindestlaufzeit',
+      'minimum pause': 'Mindestpause', 'no demand': 'kein Bedarf', 'deficit not covered': 'Defizit noch nicht gedeckt',
+      'room below setpoint': 'Raum zu kalt', 'room above setpoint': 'Raum zu warm', 'no room, setpoint or outside temperature': 'keine Werte von der WP: Heizkurve'},
+    text: `<p>Das Haus verliert ständig Wärme. Die WP liefert sie in wenigen langen Läufen statt in vielen kurzen.</p><ul>
+<li><b>Defizit</b>: die Wärme, die dem Haus fehlt, in kWh. Jede Minute wächst es um den Wärmeverlust (UA × (Raum − Außen)) und sinkt um die gelieferte Heizwärme (Durchfluss × (Vorlauf − Rücklauf)). Warmwasser zählt nicht.</li>
+<li><b>Start</b> bei {start} kWh nach mindestens {pause} h Pause, <b>Stopp</b> bei {stop} kWh nach mindestens {run} h Lauf. Das verhindert das Takten.</li>
+<li><b>Raumkorrektur</b>: Das Defizit wird langsam zu {gain} kWh je Kelvin unter Soll gezogen, so summieren sich Fehler nicht auf. Raum mehr als {low} K unter Soll: sofort an, mehr als {high} K über Soll: sofort aus.</li>
+<li><b>UA</b> lernt sich selbst: alle 72 h aus der gelieferten Wärme, wenn der Raum am Ende so warm war wie am Anfang. Sonne und Geräte stecken im Mittel mit drin. Bleibt im Flash, auch nach einem Stromausfall.</li>
+<li>Ohne Werte von der WP bleibt die Heizanforderung an, die WP fährt nach Heizkurve. Fällt der ESP aus, tut das Relais dasselbe.</li></ul>`}
+};
+function renderControl(c) {
+  const box = $('#ctl'); box.hidden = !c; if (!c) return;
+  const L = CTL[lang] || CTL.en, f = v => v == null ? '—' : (+v).toLocaleString(lang, {maximumFractionDigits: 2});
+  tx('cTitle', L.title);
+  tx('cState', (c.active ? L.active : L.passive) + ' · ' + (c.request ? L.on : L.off) + (c.active && c.reason ? ' (' + (L.reasons[c.reason] || c.reason) + ')' : ''));
+  tx('cDef', f(c.deficit)); tx('cDefL', L.deficit); tx('cLoss', f(c.loss)); tx('cLossL', L.loss); tx('cHeat', f(c.heat)); tx('cHeatL', L.heat);
+  tx('cUa', f(Math.round(c.ua))); tx('cUaL', L.ua.replace('{n}', c.calibrations).replace('{h}', Math.round(c.calibration_left)));
+  const lo = Math.min(c.stop, c.deficit) - 1, hi = Math.max(c.start, c.deficit) + 1, x = v => ((v - lo) / (hi - lo) * 100).toFixed(1) + '%';
+  $('#cBar').innerHTML = `<i style="left:${x(c.stop)}"></i><em style="left:${x(c.stop)}">Stop ${f(c.stop)}</em><i style="left:${x(c.start)}"></i><em style="left:${x(c.start)}">Start ${f(c.start)}</em><i class="now" style="left:${x(c.deficit)}"></i>`;
+  tx('cHow', L.how);
+  $('#cText').innerHTML = L.text.replace('{start}', f(c.start)).replace('{stop}', f(c.stop)).replace('{pause}', f(c.min_pause)).replace('{run}', f(c.min_run))
+    .replace('{gain}', f(c.room_gain)).replace('{low}', f(c.room_low)).replace('{high}', f(c.room_high));
+}
+
 // ---- data: values.json next to this page, every 10 s
 function setLang(code) { if (code === lang) return; lang = code; translatePage(); paint(); renderReadings(); }
 async function poll() {
@@ -357,6 +407,7 @@ async function poll() {
     tx('hdrModel', model);
     $('#nc').hidden = d.connected !== false;
     renderValues(Array.isArray(d.values) ? d.values : []);
+    renderControl(d.control);
   } catch (e) { $('#nc').hidden = false; }
 }
 lang = browserLang();

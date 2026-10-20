@@ -2,6 +2,7 @@
 // Heat deficit controller on the ESP: switches the heat request relay from values of the heat pump only.
 // Runs without network; Home Assistant can only watch and change the settings.
 
+#include <string>
 #include <vector>
 
 #include "esphome/core/component.h"
@@ -53,6 +54,8 @@ class AlthermaControl : public PollingComponent {
   // Off: the model keeps running (shadow), but the relay is left alone
   void set_active(bool active);
   bool is_active() const { return this->active_; }
+  // State and settings as JSON, for the diagram page
+  std::string json() const;
 
   // Settings, from the number entities
   float get_setting(Setting s) const;

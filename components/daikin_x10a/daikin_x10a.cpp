@@ -674,7 +674,12 @@ void DaikinX10A::build_diagram_json_() {
     json_string(s, d.value);
     s += '}';
   }
-  s += "]}";
+  s += ']';
+  if (this->control_json_) {
+    s += ",\"control\":";
+    s += this->control_json_();
+  }
+  s += '}';
   LockGuard guard(this->json_lock_);
   this->json_.swap(s);
 #endif

@@ -139,6 +139,13 @@ sensor:
     accuracy_decimals: 0
     web_server: {sorting_group_id: grp_state}
 
+  # Controller (altherma_control)
+  - {platform: altherma_control, type: deficit, name: Regler Defizit, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: ua, name: Regler UA gelernt, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: heat_loss, name: Regler Wärmeverlust, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: heat_delivered, name: Regler Heizleistung, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: calibration_left, name: Regler nächste Kalibrierung, web_server: {sorting_group_id: grp_control}}
+
 binary_sensor:
   - platform: daikin_x10a
     label: "Thermostat ON/OFF"
@@ -195,6 +202,9 @@ text_sensor:
   - platform: daikin_x10a
     info: layout
     name: Layout-Korrekturen
+  - platform: altherma_control
+    name: Regler Grund
+    web_server: {sorting_group_id: grp_control}
 
 # --- Relays and control (stage 3) ---
 # Fail-safe: a dead or unpowered ESP leaves the heat pump on its own control (heat request on through the normally
@@ -220,6 +230,7 @@ altherma_control:
   ua: 90               # start value in W/K; learned from then on, kept in flash
   room_low: 0.5        # room below setpoint - 0.5 K: on at once
   room_high: 1.0       # room above setpoint + 1 K: off at once
+  diagram_id: altherma # shows the controller with an explanation on /altherma/
 
 number:
   - {platform: altherma_control, type: start, name: Regler Start}

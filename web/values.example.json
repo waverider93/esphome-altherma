@@ -103,5 +103,23 @@
    "n": "Abtaubetrieb",
    "v": "OFF"
   }
- ]
+ ],
+ "control": {
+  "active": true,
+  "request": false,
+  "reason": "minimum pause",
+  "deficit": 2.35,
+  "start": 3,
+  "stop": 0,
+  "min_run": 2,
+  "min_pause": 1,
+  "room_gain": 5,
+  "ua": 91,
+  "calibrations": 3,
+  "calibration_left": 41.5,
+  "loss": 1.48,
+  "heat": 0.0,
+  "room_low": 0.5,
+  "room_high": 1.0
+ }
 }

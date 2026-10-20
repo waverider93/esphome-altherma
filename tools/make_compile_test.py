@@ -18,6 +18,7 @@ def drop_block(text, key):
 for key in ("wifi", "ota", "web_server"):
     s = drop_block(s, key)
 s = re.sub(r"^\s*web_server: \{sorting_group_id: \w+\}\n", "", s, flags=re.M)
+s = re.sub(r", web_server: \{sorting_group_id: \w+\}", "", s)
 s = re.sub(r"^# Local dashboard.*\n", "", s, flags=re.M)
 s = s.replace("name: altherma\n", "name: x10a-diagram\n", 1)
 for old, new in (("GPIO25", "GPIO13"), ("GPIO26", "GPIO14"), ("GPIO27", "GPIO4")):
