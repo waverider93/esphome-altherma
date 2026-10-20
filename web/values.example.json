@@ -1,0 +1,107 @@
+{
+ "model": "Altherma(EHVH-D8 ECH2O)",
+ "lang": "de",
+ "connected": true,
+ "values": [
+  {
+   "l": "R1T-Outdoor air temp.",
+   "n": "Außentemperatur (R1T)",
+   "v": "4.5"
+  },
+  {
+   "l": "Leaving water temp. before BUH (R1T)",
+   "n": "Vorlauf vor Heizstab (R1T)",
+   "v": "38.2"
+  },
+  {
+   "l": "Leaving water temp. after BUH (R2T)",
+   "n": "Vorlauf nach Heizstab (R2T)",
+   "v": "38.6"
+  },
+  {
+   "l": "Inlet water temp.(R4T)",
+   "n": "Rücklauf (R4T)",
+   "v": "33.1"
+  },
+  {
+   "l": "DHW tank temp. (R5T)",
+   "n": "Warmwasserspeicher (R5T)",
+   "v": "47.0"
+  },
+  {
+   "l": "Indoor ambient temp. (R1T)",
+   "n": "Raumtemperatur (R1T)",
+   "v": "21.3"
+  },
+  {
+   "l": "RT setpoint",
+   "n": "Raum-Sollwert",
+   "v": "21.5"
+  },
+  {
+   "l": "DHW setpoint",
+   "n": "Warmwasser-Sollwert",
+   "v": "50"
+  },
+  {
+   "l": "LW setpoint (main)",
+   "n": "Vorlauf-Sollwert (Haupt)",
+   "v": "39"
+  },
+  {
+   "l": "INV frequency (rps)",
+   "n": "Inverterfrequenz (rps)",
+   "v": "42"
+  },
+  {
+   "l": "3way valve(On:DHW_Off:Space)",
+   "n": "3-Wege-Ventil (An: WW, Aus: Heizung)",
+   "v": "OFF"
+  },
+  {
+   "l": "Water pump operation",
+   "n": "Wasserpumpe",
+   "v": "ON"
+  },
+  {
+   "l": "Flow sensor (l/min)",
+   "n": "Durchfluss (l/min)",
+   "v": "14.8"
+  },
+  {
+   "l": "Water pressure",
+   "n": "Wasserdruck",
+   "v": "1.8"
+  },
+  {
+   "l": "Operation Mode",
+   "n": "Betriebsart",
+   "v": "Heating"
+  },
+  {
+   "l": "I/U operation mode",
+   "n": "Betriebsart Innengerät",
+   "v": "Heating"
+  },
+  {
+   "l": "Error type",
+   "n": "Fehlertyp",
+   "v": "Normal"
+  },
+  {
+   "l": "Error Code",
+   "n": "Fehlercode",
+   "v": "0"
+  },
+  {
+   "l": "Thermostat ON/OFF",
+   "n": "Thermostat EIN/AUS",
+   "v": "ON"
+  },
+  {
+   "l": "Defrost Operation",
+   "n": "Abtaubetrieb",
+   "v": "OFF"
+  }
+ ]
+}

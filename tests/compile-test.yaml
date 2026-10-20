@@ -21,16 +21,21 @@ uart:
 
 daikin_x10a:
   id: altherma
-  model: "ERGA E EHSH-X P30-50 E_EF series 04-08kW-ECH2O"
+  model: auto
+  language: de
   log_raw: true
 
 sensor:
-  - {platform: daikin_x10a, label: "Indoor ambient temp. (R1T)", name: Raum}
+  - {platform: daikin_x10a, label: "Indoor ambient temp. (R1T)"}
+  - {platform: daikin_x10a, label: "Wasserdruck"}
   - {platform: daikin_x10a, label: "High Pressure(T)", name: HD Temp}
   - {platform: daikin_x10a, register: 0x62, offset: 9, conversion: 105, data_size: 2, name: Durchfluss roh}
 binary_sensor:
-  - {platform: daikin_x10a, label: "Water pump operation", name: Pumpe}
+  - {platform: daikin_x10a, label: "Water pump operation"}
   - {platform: template, name: Verbunden, lambda: "return id(altherma).is_connected();"}
 text_sensor:
-  - {platform: daikin_x10a, label: "I/U operation mode", name: Modus}
+  - {platform: daikin_x10a, label: "I/U operation mode"}
   - {platform: daikin_x10a, label: "Error Code", register: 0x60, name: Fehler}
+  - {platform: daikin_x10a, info: model, name: Modell}
+  - {platform: daikin_x10a, info: detection, name: Erkennung}
+  - {platform: daikin_x10a, info: layout, name: Layout-Korrekturen}

@@ -1,7 +1,9 @@
 # Daikin Altherma 3 R ECH2O (EHSX04P50EF + ERGA04EV) on an ESP32 with relay board.
 # X10A: ESP RX <- X10A pin 2 (TX), ESP TX -> X10A pin 3 (RX), GND <- X10A pin 5. See README.
 #
-# Relay pins are placeholders: check them on the board before wiring anything.
+# Relay pins are placeholders for an ESP32 board with 4 or 8 relays (LC-Relay-ESP32-4R-A2: probably 32/33/25/26).
+# Check them on the board before wiring anything. The relays switch nothing until they are wired, and the heat pump
+# only reacts to them after the field settings in README (Relays).
 
 substitutions:
   name: altherma
@@ -11,6 +13,8 @@ substitutions:
   relay_cool: GPIO33  # COM + normally open   -> X12M 16 (C): relay on  = cool request
   relay_sg1: GPIO25   # X15M 3-4, Smart Grid contact 1 ([D-01]=3)
   relay_sg2: GPIO26   # X15M 5-6, Smart Grid contact 2
+  relay_safety: GPIO27  # in series with the bridge X15M 7-8 (normally closed): relay on = heat pump stops
+  fallback_minutes: "15"  # without Home Assistant this long, the relays go back to the heat pump's own control
 
 esphome:
   name: ${name}
@@ -68,7 +72,10 @@ uart:
 daikin_x10a:
   id: altherma
   uart_id: x10a_uart
+  # A fixed model; the survey after boot still checks it and corrects register layouts. "auto" detects it.
   model: "ERGA E EHSH-X P30-50 E_EF series 04-08kW-ECH2O"
+  language: de        # entity names without name: and the diagram page
+  diagram: true       # drawing of the installation on http://altherma.local/altherma/
   update_interval: 30s
   # true logs every reply as hex, for comparing with ESPAltherma
   log_raw: false
@@ -171,42 +178,91 @@ text_sensor:
     register: 0x60
     name: Fehlercode
     web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    info: model
+    name: Modell
+  - platform: daikin_x10a
+    info: detection
+    name: Modellerkennung
+  - platform: daikin_x10a
+    info: layout
+    name: Layout-Korrekturen
 
-# --- Relays (stage 3). Nothing is wired yet: keep this commented until the electrician is done. ---
-#
-# switch:
-#   # On = heat request. The relay is wired normally closed, so it is energised to REMOVE the request:
-#   # a dead ESP keeps heating.
-#   - platform: gpio
-#     id: heat_request
-#     name: Heizanforderung
-#     pin: {number: ${relay_heat}, inverted: true}
-#     restore_mode: ALWAYS_ON
-#     interlock: [cool_request]
-#     web_server: {sorting_group_id: grp_control}
-#   - platform: gpio
-#     id: cool_request
-#     name: Kühlanforderung
-#     pin: ${relay_cool}
-#     restore_mode: ALWAYS_OFF
-#     interlock: [heat_request]
-#     web_server: {sorting_group_id: grp_control}
-#
-# select:
-#   - platform: template
-#     name: Smart Grid
-#     options: [Normal, Einschaltempfehlung, Sperre, Zwangs-EIN]
-#     initial_option: Normal
-#     restore_value: false
-#     optimistic: true
-#     on_value:
-#       - lambda: |-
-#           // contact 1 (3-4) / contact 2 (5-6): 00 normal, 01 recommended on, 10 blocked, 11 forced on
-#           bool c1 = i == 2 || i == 3, c2 = i == 1 || i == 3;
-#           id(sg1).write_state(c1);
-#           id(sg2).write_state(c2);
-#     web_server: {sorting_group_id: grp_control}
-#
-# output:
-#   - {platform: gpio, id: sg1, pin: ${relay_sg1}}
-#   - {platform: gpio, id: sg2, pin: ${relay_sg2}}
+# --- Relays (stage 3) ---
+# Fail-safe: a dead or unpowered ESP leaves the heat pump on its own control (heat request on through the normally
+# closed contact, cooling, Smart Grid and the safety contact released). Without Home Assistant for
+# ${fallback_minutes} minutes, the ESP does the same.
+
+switch:
+  # On = heat request on X12M 15 (H). Wired COM + normally closed: the relay is energised to REMOVE the request.
+  - platform: gpio
+    id: heat_request
+    name: Heizanforderung
+    pin:
+      number: ${relay_heat}
+      inverted: true
+    restore_mode: ALWAYS_ON
+    interlock: [cool_request]
+    web_server: {sorting_group_id: grp_control}
+  # On = cool request on X12M 16 (C), wired COM + normally open. Only used with [C-05]=2.
+  - platform: gpio
+    id: cool_request
+    name: Kühlanforderung
+    pin: ${relay_cool}
+    restore_mode: ALWAYS_OFF
+    interlock: [heat_request]
+    web_server: {sorting_group_id: grp_control}
+  # On = opens the safety thermostat loop X15M 7-8: the heat pump stops with an error. Emergency use only.
+  - platform: gpio
+    id: safety_stop
+    name: Sicherheitsabschaltung
+    icon: mdi:alert-octagon
+    pin: ${relay_safety}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_control}
+
+select:
+  # Smart Grid contacts X15M 3-4 / 5-6 ([D-01]=3): 00 normal, 01 recommended on, 10 blocked, 11 forced on
+  - platform: template
+    id: smart_grid
+    name: Smart Grid
+    options: [Normal, Einschaltempfehlung, Sperre, Zwangs-EIN]
+    initial_option: Normal
+    restore_value: false
+    optimistic: true
+    on_value:
+      - lambda: |-
+          id(sg1).set_state(i == 2 || i == 3);
+          id(sg2).set_state(i == 1 || i == 3);
+    web_server: {sorting_group_id: grp_control}
+
+output:
+  - platform: gpio
+    id: sg1
+    pin: ${relay_sg1}
+  - platform: gpio
+    id: sg2
+    pin: ${relay_sg2}
+
+globals:
+  - id: minutes_without_ha
+    type: int
+    initial_value: "0"
+
+interval:
+  - interval: 1min
+    then:
+      - lambda: |-
+          if (api::global_api_server->is_connected()) {
+            id(minutes_without_ha) = 0;
+            return;
+          }
+          if (++id(minutes_without_ha) != ${fallback_minutes})
+            return;
+          ESP_LOGW("fallback", "No Home Assistant for ${fallback_minutes} min: relays back to the heat pump's control");
+          if (!id(cool_request).state)
+            id(heat_request).turn_on();
+          id(safety_stop).turn_off();
+          auto call = id(smart_grid).make_call();
+          call.set_option("Normal");
+          call.perform();

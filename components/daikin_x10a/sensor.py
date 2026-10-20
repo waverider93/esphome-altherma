@@ -2,11 +2,11 @@ from esphome.components import sensor
 import esphome.config_validation as cv
 from esphome.const import CONF_DEVICE_CLASS, CONF_STATE_CLASS, CONF_UNIT_OF_MEASUREMENT
 
-from . import CONF_LABEL, VALUE_SCHEMA, final_validate_value, register_value, resolve_value
+from . import VALUE_SCHEMA, default_name, final_validate_value, register_value, resolve_value
 
 DEPENDENCIES = ["daikin_x10a"]
 
-CONFIG_SCHEMA = sensor.sensor_schema(accuracy_decimals=1).extend(VALUE_SCHEMA)
+CONFIG_SCHEMA = cv.All(default_name, sensor.sensor_schema(accuracy_decimals=1).extend(VALUE_SCHEMA))
 FINAL_VALIDATE_SCHEMA = final_validate_value("sensor")
 
 
@@ -29,9 +29,9 @@ def _defaults(label, conv):
 async def to_code(config):
     from esphome.core import CORE
 
-    if CONF_LABEL in config:
-        _, _, conv, _, label = resolve_value(config, CORE.config)
-        unit, device_class = _defaults(label, conv)
+    found = resolve_value(config, CORE.config)
+    if found:
+        unit, device_class = _defaults(found[0].label, found[0].conv)
         config = dict(config)
         if unit:
             config.setdefault(CONF_UNIT_OF_MEASUREMENT, unit)

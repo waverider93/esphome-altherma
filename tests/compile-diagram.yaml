@@ -1,0 +1,123 @@
+# Like compile-test.yaml, with the diagram page, the API and the relays of the example (Ethernet and the bare web server, no registry downloads).
+esphome:
+  name: x10a-diagram
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source: {type: local, path: ../components}
+
+logger:
+
+uart:
+  id: x10a_uart
+  rx_pin: GPIO16
+  tx_pin: GPIO17
+  baud_rate: 9600
+  parity: EVEN
+
+daikin_x10a:
+  id: altherma
+  model: auto
+  language: de
+  log_raw: true
+  diagram: true
+
+sensor:
+  - {platform: daikin_x10a, label: "Indoor ambient temp. (R1T)"}
+  - {platform: daikin_x10a, label: "Wasserdruck"}
+  - {platform: daikin_x10a, label: "High Pressure(T)", name: HD Temp}
+  - {platform: daikin_x10a, register: 0x62, offset: 9, conversion: 105, data_size: 2, name: Durchfluss roh}
+binary_sensor:
+  - {platform: daikin_x10a, label: "Water pump operation"}
+  - {platform: template, name: Verbunden, lambda: "return id(altherma).is_connected();"}
+text_sensor:
+  - {platform: daikin_x10a, label: "I/U operation mode"}
+  - {platform: daikin_x10a, label: "Error Code", register: 0x60, name: Fehler}
+  - {platform: daikin_x10a, info: model, name: Modell}
+  - {platform: daikin_x10a, info: detection, name: Erkennung}
+  - {platform: daikin_x10a, info: layout, name: Layout-Korrekturen}
+
+ethernet:
+  type: LAN8720
+  mdc_pin: GPIO23
+  mdio_pin: GPIO18
+  clk:
+    pin: GPIO0
+    mode: CLK_EXT_IN
+  phy_addr: 0
+
+web_server_base:
+
+mdns:
+  disabled: true
+
+api:
+
+# Relays and fallback, as in examples/altherma-ech2o.yaml
+switch:
+  # On = heat request on X12M 15 (H). Wired COM + normally closed: the relay is energised to REMOVE the request.
+  - platform: gpio
+    id: heat_request
+    name: Heizanforderung
+    pin: {number: GPIO32, inverted: true}
+    restore_mode: ALWAYS_ON
+    interlock: [cool_request]
+  # On = cool request on X12M 16 (C), wired COM + normally open. Only used with [C-05]=2.
+  - platform: gpio
+    id: cool_request
+    name: Kühlanforderung
+    pin: GPIO33
+    restore_mode: ALWAYS_OFF
+    interlock: [heat_request]
+  # On = opens the safety thermostat loop X15M 7-8: the heat pump stops with an error. Emergency use only.
+  - platform: gpio
+    id: safety_stop
+    name: Sicherheitsabschaltung
+    icon: mdi:alert-octagon
+    pin: GPIO4  # GPIO27 is taken by Ethernet here
+    restore_mode: ALWAYS_OFF
+
+select:
+  # Smart Grid contacts X15M 3-4 / 5-6 ([D-01]=3): 00 normal, 01 recommended on, 10 blocked, 11 forced on
+  - platform: template
+    id: smart_grid
+    name: Smart Grid
+    options: [Normal, Einschaltempfehlung, Sperre, Zwangs-EIN]
+    initial_option: Normal
+    restore_value: false
+    optimistic: true
+    on_value:
+      - lambda: |-
+          id(sg1).set_state(i == 2 || i == 3);
+          id(sg2).set_state(i == 1 || i == 3);
+
+output:
+  - {platform: gpio, id: sg1, pin: GPIO13}
+  - {platform: gpio, id: sg2, pin: GPIO14}
+
+globals:
+  - id: minutes_without_ha
+    type: int
+    initial_value: "0"
+
+interval:
+  - interval: 1min
+    then:
+      - lambda: |-
+          if (api::global_api_server->is_connected()) {
+            id(minutes_without_ha) = 0;
+            return;
+          }
+          if (++id(minutes_without_ha) != 15)
+            return;
+          ESP_LOGW("fallback", "No Home Assistant for 15 min: relays back to the heat pump's control");
+          if (!id(cool_request).state)
+            id(heat_request).turn_on();
+          id(safety_stop).turn_off();
+          auto call = id(smart_grid).make_call();
+          call.set_option("Normal");
+          call.perform();
