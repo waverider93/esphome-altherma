@@ -1,68 +1,85 @@
-# Control concept (stage 3, planned)
+# Control concept
 
-How the ESP is meant to drive the heat pump through the room thermostat input. **Not implemented yet**: today the
-example only has the relays and a fallback; the controller below is the plan. The shadow controllers in Home
-Assistant (`waermebilanz_schattenregler*.yaml` in the Home Assistant config) run the same model without switching.
+The heat pump is driven through its room thermostat input (X12M 15/16). The controller runs on the ESP
+(`components/altherma_control`), uses only values of the heat pump read over X10A, calibrates itself and needs no
+network. Home Assistant is optional: it watches, keeps the history, and can change the settings, the Madoka
+setpoint and Smart Grid.
 
-## Operating modes
+## Layers
 
-Select "Regelung" on the ESP. Exactly one side switches the relays; the other side is ignored (logged as a warning).
+| Layer | Task | Needs |
+| --- | --- | --- |
+| 1. Heat pump | heating curve when the ESP is dead (heat relay normally closed on X12M 15) | nothing |
+| 2. ESP | deficit controller, self-calibration, settings and state kept in flash | X10A only |
+| 3. Home Assistant (optional) | display, history, settings, setpoint, Smart Grid | network, never required |
 
-| Mode | Decides heat and cool | Smart Grid | Home Assistant needed | Home Assistant gone for 15 min |
-| --- | --- | --- | --- | --- |
-| ESP | controller on the ESP, UA/C fixed in the YAML, no gains | always Normal | no, `api:` can be removed | nothing changes |
-| Home Assistant | Home Assistant through Heizanforderung/Kühlanforderung; the ESP only executes | from Home Assistant | yes | heat request on (heating curve), Smart Grid Normal |
-| ESP + HA (recommended) | controller on the ESP; Home Assistant supplies UA/C, gains and Smart Grid | from Home Assistant | for the inputs only | the ESP goes on with the last values, Smart Grid Normal |
+## Operating modes ("Regelung" on the ESP)
 
-The safety stop can be switched in every mode. Until the controller runs on the ESP, its modes keep the heat
-request on (heating curve).
+Exactly one side switches the heat request; the other is ignored (logged as a warning).
 
-## Who decides what
+| Mode | Switches the heat request | Home Assistant gone for 15 min |
+| --- | --- | --- |
+| ESP (default) | the controller on the ESP | Smart Grid back to Normal, nothing else changes |
+| Home Assistant (tests) | Home Assistant through "Heizanforderung"; the controller keeps calculating without switching | Smart Grid Normal, Regelung back to ESP |
 
-| Situation | Heat request (X12M 15) | Cool request (X12M 16) | Smart Grid 1/2 | Safety contact |
-| --- | --- | --- | --- | --- |
-| Everything running (ESP + HA) | deficit controller on the ESP, gains and UA/C from Home Assistant | mode from Home Assistant | from Home Assistant (PV, price) | closed |
-| Home Assistant gone | ESP keeps controlling with the last UA/C, without gains | unchanged | Normal after 15 min | closed |
-| X10A gone (no room temperature) | on, the heat pump follows its heating curve | off | Normal | closed |
-| ESP dead or unpowered | on (normally closed contact), heating curve | off | Normal | closed |
-| Manual (ESP web page) | as set | as set | as set | as set |
+Cooling ("Kühlanforderung") is switched by hand in both modes; the controller does not heat while it is on. The
+safety stop can be switched in every mode.
 
-Until the controller runs on the ESP, the example's fallback after 15 minutes without Home Assistant is the heat
-request on (heating curve), Smart Grid Normal, safety contact closed.
+| Situation | Heat request | Smart Grid |
+| --- | --- | --- |
+| Everything running | controller | from Home Assistant |
+| Home Assistant gone | controller | Normal after 15 min |
+| X10A gone (no room, setpoint or outside temperature) | on: heating curve | unchanged |
+| ESP dead or unpowered | on (normally closed contact): heating curve | Normal (contacts open) |
 
 ## Deficit
 
 Every minute:
 
 ```
-deficit += (heat loss - heat delivered - gains) x 1 min
+deficit += (UA x (room - outside) - heat delivered) x 1 min
+deficit += (k x (setpoint - room) - deficit) x 1 min / 12 h      room anchor
+deficit += k x setpoint change                                   at once, when the setpoint changes
 ```
 
-| Term | Formula | Source |
-| --- | --- | --- |
-| Heat loss | UA x (room - outside) | UA from the Home Assistant calibration (about 70-105 W/K so far); room = Madoka (Indoor ambient temp. R1T), outside = R1T-Outdoor air temp., both over X10A |
-| Heat delivered | flow x 4.18 x (leaving - inlet) / 60 [kW, flow in l/min] | X10A: Flow sensor, Leaving water temp. after BUH (R2T), Inlet water temp. (R4T); only while the 3-way valve is on space heating, so hot water runs do not count |
-| Gains | PV, waste heat of the household power, fireplace | Home Assistant only; 0 without it, so the ESP rather heats a little too much |
-| Room anchor | the deficit is pulled towards C x (setpoint - room) with a time constant of about 12 h | C (thermal capacity) from Home Assistant, setpoint = Madoka (RT setpoint) |
-| Setpoint change | deficit += C x change of setpoint, at once | as in Home Assistant |
-
-The room anchor keeps model errors (wrong UA, missing gains) from adding up: if the room stays too warm, the deficit
-shrinks bit by bit, and the other way round.
-
-Example: 5 °C outside, 21.5 °C inside, UA 90 W/K gives 1.5 kW loss, so the deficit grows by 1.5 kWh per hour
-without heating and reaches the start threshold of 3 kWh after 2 h. With the heat pump delivering 2.5 kW it falls by
-1 kWh per hour: back at 0 after about 3 h of running.
-
-## Switching rules
-
-| Rule | Proposal |
+| Value | Source (X10A) |
 | --- | --- |
-| Start | deficit >= 3 kWh |
-| Stop | deficit <= 0 |
+| room, setpoint | Madoka: Indoor ambient temp. (R1T), RT setpoint |
+| outside | R1T-Outdoor air temp. |
+| heat delivered | flow x 4.18 x (leaving R2T - inlet R4T) / 60 kW; 0 while the 3-way valve is on hot water |
+| UA | learned (start value 90 W/K) |
+| k (room gain) | setting, 5 kWh/K |
+
+The room anchor keeps model errors from adding up: if the room stays too warm, the deficit shrinks bit by bit, and
+the other way round. Sun, appliances and the fireplace are not measured; on average they are inside the learned UA,
+and the anchor handles a sunny day.
+
+Example: 5 °C outside, 21.5 °C inside, UA 90 W/K gives 1.5 kW loss, so +1.5 kWh deficit per hour without heating:
+the start threshold of 3 kWh after 2 h. With 2.5 kW from the heat pump the deficit falls by 1 kWh per hour: back at
+0 after about 3 h of running.
+
+## Self-calibration
+
+Over a window of 72 h: UA measured = heat delivered / sum of (room - outside) x hours. It counts only when the room
+ends the window within 0.3 K of where it started (the floor stored nothing on balance), the values were there for
+90 % of the time, and it was on average at least 5 K colder outside than inside. The new UA is 70 % old + 30 %
+measured, between 20 and 400 W/K.
+
+UA, the deficit and the running window are saved in flash every 10 minutes. After a power cut the controller goes on
+at once with the last UA: there is no gap in heating, the calibration only refines. Setting UA by hand starts a new
+window from that value.
+
+## Switching rules (settings, from Home Assistant or the ESP web page)
+
+| Rule | Default |
+| --- | --- |
+| Start | deficit >= 3 kWh, after the minimum pause |
+| Stop | deficit <= 0 kWh, after the minimum run time |
 | Minimum run time | 2 h |
 | Minimum pause | 1 h |
-| Room too cold | room < setpoint - 0.5 K: on at once |
-| Room too warm | room > setpoint + 1 K: off, even within the minimum run time |
+| Room gain k | 5 kWh/K |
+| Room too cold | room < setpoint - 0.5 K: on at once (`room_low` in the YAML) |
+| Room too warm | room > setpoint + 1 K: off at once, even within the minimum run time (`room_high`) |
 | Hot water | left to the heat pump |
 
 Start threshold, minimum run time and minimum pause prevent the cycling. Daikin's own stops remain: the overshoot

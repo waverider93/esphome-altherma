@@ -82,7 +82,8 @@ python3 components/daikin_x10a/catalog.py "ERGA E EHSH-X P30-50 E_EF series 04-0
 ```
 
 Full example with diagram, relays and fallback: [examples/altherma-ech2o.yaml](examples/altherma-ech2o.yaml).
-Planned control on the ESP (deficit controller, fallbacks): [docs/control-concept.md](docs/control-concept.md).
+Control on the ESP (`altherma_control`: deficit controller with self-calibration, operating modes, fallbacks):
+[docs/control-concept.md](docs/control-concept.md).
 
 ## Diagram
 
@@ -134,12 +135,14 @@ has its own).
 
 ```sh
 g++ -std=c++17 -Icomponents/daikin_x10a tests/test_converters.cpp && ./a.out
+g++ -std=c++17 -Icomponents/altherma_control tests/test_deficit_model.cpp && ./a.out
 for t in test_survey test_detect test_layoutfix; do   # ESPAltherma's own tests, on the vendored headers
   g++ -std=c++17 -w -DDAIKIN_X10A_ESPALTHERMA_IMPL -Itests/espaltherma -Icomponents/daikin_x10a \
     tests/espaltherma/$t.cpp -o /tmp/$t && /tmp/$t
 done
 esphome compile tests/compile-test.yaml      # no network
-esphome compile tests/compile-diagram.yaml   # Ethernet, API, diagram, relays
+python3 tools/make_compile_test.py           # the example without WiFi, for builds without downloads
+esphome compile tests/compile-diagram.yaml   # Ethernet, API, diagram, relays, control
 ```
 
 ## License
