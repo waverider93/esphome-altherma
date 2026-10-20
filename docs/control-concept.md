@@ -4,11 +4,24 @@ How the ESP is meant to drive the heat pump through the room thermostat input. *
 example only has the relays and a fallback; the controller below is the plan. The shadow controllers in Home
 Assistant (`waermebilanz_schattenregler*.yaml` in the Home Assistant config) run the same model without switching.
 
+## Operating modes
+
+Select "Regelung" on the ESP. Exactly one side switches the relays; the other side is ignored (logged as a warning).
+
+| Mode | Decides heat and cool | Smart Grid | Home Assistant needed | Home Assistant gone for 15 min |
+| --- | --- | --- | --- | --- |
+| ESP | controller on the ESP, UA/C fixed in the YAML, no gains | always Normal | no, `api:` can be removed | nothing changes |
+| Home Assistant | Home Assistant through Heizanforderung/Kühlanforderung; the ESP only executes | from Home Assistant | yes | heat request on (heating curve), Smart Grid Normal |
+| ESP + HA (recommended) | controller on the ESP; Home Assistant supplies UA/C, gains and Smart Grid | from Home Assistant | for the inputs only | the ESP goes on with the last values, Smart Grid Normal |
+
+The safety stop can be switched in every mode. Until the controller runs on the ESP, its modes keep the heat
+request on (heating curve).
+
 ## Who decides what
 
 | Situation | Heat request (X12M 15) | Cool request (X12M 16) | Smart Grid 1/2 | Safety contact |
 | --- | --- | --- | --- | --- |
-| Everything running | deficit controller on the ESP, gains and UA/C from Home Assistant | mode from Home Assistant | from Home Assistant (PV, price) | closed |
+| Everything running (ESP + HA) | deficit controller on the ESP, gains and UA/C from Home Assistant | mode from Home Assistant | from Home Assistant (PV, price) | closed |
 | Home Assistant gone | ESP keeps controlling with the last UA/C, without gains | unchanged | Normal after 15 min | closed |
 | X10A gone (no room temperature) | on, the heat pump follows its heating curve | off | Normal | closed |
 | ESP dead or unpowered | on (normally closed contact), heating curve | off | Normal | closed |

@@ -14,7 +14,7 @@ substitutions:
   relay_sg1: GPIO25   # X15M 3-4, Smart Grid contact 1 ([D-01]=3)
   relay_sg2: GPIO26   # X15M 5-6, Smart Grid contact 2
   relay_safety: GPIO27  # in series with the bridge X15M 7-8 (normally closed): relay on = heat pump stops
-  fallback_minutes: "15"  # without Home Assistant this long, the relays go back to the heat pump's own control
+  fallback_minutes: "15"  # without Home Assistant this long, what came from it is reset (see Regelung below)
 
 esphome:
   name: ${name}
@@ -34,6 +34,7 @@ logger:
   # The X10A uses UART2; keep the log on UART0 (USB)
   level: DEBUG
 
+# Optional: only needed with Regelung "Home Assistant" or "ESP + HA"
 api:
 
 ota:
@@ -190,39 +191,27 @@ text_sensor:
 
 # --- Relays (stage 3) ---
 # Fail-safe: a dead or unpowered ESP leaves the heat pump on its own control (heat request on through the normally
-# closed contact, cooling, Smart Grid and the safety contact released). Without Home Assistant for
-# ${fallback_minutes} minutes, the ESP does the same.
-
-switch:
-  # On = heat request on X12M 15 (H). Wired COM + normally closed: the relay is energised to REMOVE the request.
-  - platform: gpio
-    id: heat_request
-    name: Heizanforderung
-    pin:
-      number: ${relay_heat}
-      inverted: true
-    restore_mode: ALWAYS_ON
-    interlock: [cool_request]
-    web_server: {sorting_group_id: grp_control}
-  # On = cool request on X12M 16 (C), wired COM + normally open. Only used with [C-05]=2.
-  - platform: gpio
-    id: cool_request
-    name: Kühlanforderung
-    pin: ${relay_cool}
-    restore_mode: ALWAYS_OFF
-    interlock: [heat_request]
-    web_server: {sorting_group_id: grp_control}
-  # On = opens the safety thermostat loop X15M 7-8: the heat pump stops with an error. Emergency use only.
-  - platform: gpio
-    id: safety_stop
-    name: Sicherheitsabschaltung
-    icon: mdi:alert-octagon
-    pin: ${relay_safety}
-    restore_mode: ALWAYS_OFF
-    web_server: {sorting_group_id: grp_control}
+# closed contact, cooling, Smart Grid and the safety contact released).
+#
+# Who decides is set by "Regelung" (docs/control-concept.md), and only one side ever switches the relays:
+#   ESP            the controller on the ESP decides; Home Assistant is not needed (api: can be removed)
+#   Home Assistant Home Assistant switches Heizanforderung/Kühlanforderung/Smart Grid; the ESP only executes them
+#   ESP + HA       the controller on the ESP decides; Home Assistant only supplies inputs (UA/C, gains, Smart Grid)
+# Until the controller runs on the ESP, its modes keep the heat request on (the heat pump's heating curve).
 
 select:
-  # Smart Grid contacts X15M 3-4 / 5-6 ([D-01]=3): 00 normal, 01 recommended on, 10 blocked, 11 forced on
+  - platform: template
+    id: control_mode
+    name: Regelung
+    options: [ESP, Home Assistant, ESP + HA]
+    initial_option: Home Assistant
+    restore_value: true
+    optimistic: true
+    on_value:
+      - script.execute: esp_control
+    web_server: {sorting_group_id: grp_control}
+  # Smart Grid contacts X15M 3-4 / 5-6 ([D-01]=3): 00 normal, 01 recommended on, 10 blocked, 11 forced on.
+  # Set by Home Assistant (modes Home Assistant and ESP + HA); always Normal in mode ESP, which knows no PV or price.
   - platform: template
     id: smart_grid
     name: Smart Grid
@@ -232,8 +221,73 @@ select:
     optimistic: true
     on_value:
       - lambda: |-
+          if (id(control_mode).active_index().value_or(1) == 0 && i != 0) {
+            ESP_LOGW("control", "Smart Grid ignored: Regelung is ESP");
+            auto call = id(smart_grid).make_call();
+            call.set_option("Normal");
+            call.perform();
+            return;
+          }
           id(sg1).set_state(i == 2 || i == 3);
           id(sg2).set_state(i == 1 || i == 3);
+    web_server: {sorting_group_id: grp_control}
+
+switch:
+  # The relays themselves: internal, switched only through the requests below or the ESP controller.
+  # Heat: X12M 15 (H), COM + normally closed, energised to REMOVE the request.
+  - platform: gpio
+    id: heat_relay
+    internal: true
+    pin:
+      number: ${relay_heat}
+      inverted: true
+    restore_mode: ALWAYS_ON
+    interlock: [cool_relay]
+  # Cool: X12M 16 (C), COM + normally open. Only used with [C-05]=2.
+  - platform: gpio
+    id: cool_relay
+    internal: true
+    pin: ${relay_cool}
+    restore_mode: ALWAYS_OFF
+    interlock: [heat_relay]
+  # Requests from Home Assistant (or the web page): executed only in mode Home Assistant
+  - platform: template
+    id: heat_request
+    name: Heizanforderung
+    lambda: return id(heat_relay).state;
+    turn_on_action:
+      - if:
+          condition: {lambda: return id(control_mode).active_index().value_or(1) == 1;}
+          then: [switch.turn_on: heat_relay]
+          else: [logger.log: {format: "Heizanforderung ignored: Regelung is not Home Assistant", level: WARN}]
+    turn_off_action:
+      - if:
+          condition: {lambda: return id(control_mode).active_index().value_or(1) == 1;}
+          then: [switch.turn_off: heat_relay]
+          else: [logger.log: {format: "Heizanforderung ignored: Regelung is not Home Assistant", level: WARN}]
+    web_server: {sorting_group_id: grp_control}
+  - platform: template
+    id: cool_request
+    name: Kühlanforderung
+    lambda: return id(cool_relay).state;
+    turn_on_action:
+      - if:
+          condition: {lambda: return id(control_mode).active_index().value_or(1) == 1;}
+          then: [switch.turn_on: cool_relay]
+          else: [logger.log: {format: "Kühlanforderung ignored: Regelung is not Home Assistant", level: WARN}]
+    turn_off_action:
+      - if:
+          condition: {lambda: return id(control_mode).active_index().value_or(1) == 1;}
+          then: [switch.turn_off: cool_relay]
+          else: [logger.log: {format: "Kühlanforderung ignored: Regelung is not Home Assistant", level: WARN}]
+    web_server: {sorting_group_id: grp_control}
+  # Opens the safety thermostat loop X15M 7-8: the heat pump stops with an error. Emergency use only, any mode.
+  - platform: gpio
+    id: safety_stop
+    name: Sicherheitsabschaltung
+    icon: mdi:alert-octagon
+    pin: ${relay_safety}
+    restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_control}
 
 output:
@@ -244,6 +298,22 @@ output:
     id: sg2
     pin: ${relay_sg2}
 
+script:
+  # The controller on the ESP (modes ESP and ESP + HA). Placeholder until the deficit controller is built:
+  # heat request on, so the heat pump follows its heating curve.
+  - id: esp_control
+    then:
+      - if:
+          condition: {lambda: return id(control_mode).active_index().value_or(1) != 1;}
+          then:
+            - switch.turn_on: heat_relay
+            - lambda: |-
+                if (id(control_mode).active_index().value_or(1) == 0) {
+                  auto call = id(smart_grid).make_call();
+                  call.set_option("Normal");
+                  call.perform();
+                }
+
 globals:
   - id: minutes_without_ha
     type: int
@@ -253,16 +323,27 @@ interval:
   - interval: 1min
     then:
       - lambda: |-
-          if (api::global_api_server->is_connected()) {
+          bool ha = false;
+          #ifdef USE_API
+          ha = api::global_api_server->is_connected();
+          #endif
+          if (ha) {
             id(minutes_without_ha) = 0;
             return;
           }
           if (++id(minutes_without_ha) != ${fallback_minutes})
             return;
-          ESP_LOGW("fallback", "No Home Assistant for ${fallback_minutes} min: relays back to the heat pump's control");
-          if (!id(cool_request).state)
-            id(heat_request).turn_on();
-          id(safety_stop).turn_off();
+          int mode = id(control_mode).active_index().value_or(1);
+          if (mode == 0)
+            return;  // ESP: nothing comes from Home Assistant
+          ESP_LOGW("fallback", "No Home Assistant for ${fallback_minutes} min: Smart Grid back to Normal");
           auto call = id(smart_grid).make_call();
           call.set_option("Normal");
           call.perform();
+          if (mode == 1) {
+            // Home Assistant decided: the heat pump takes over with its heating curve
+            ESP_LOGW("fallback", "Heat request back to the heat pump's heating curve");
+            if (!id(cool_relay).state)
+              id(heat_relay).turn_on();
+          }
+          // ESP + HA: the controller on the ESP goes on with the last values
