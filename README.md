@@ -82,6 +82,7 @@ python3 components/daikin_x10a/catalog.py "ERGA E EHSH-X P30-50 E_EF series 04-0
 ```
 
 Full example with diagram, relays and fallback: [examples/altherma-ech2o.yaml](examples/altherma-ech2o.yaml).
+Planned control on the ESP (deficit controller, fallbacks): [docs/control-concept.md](docs/control-concept.md).
 
 ## Diagram
 
