@@ -21,6 +21,8 @@ def _defaults(label, conv):
         return "bar", "pressure"
     if "current" in low or "(a)" in low:
         return "A", "current"
+    if "(kw)" in low:
+        return "kW", "power"
     if "(rps)" in low:
         return "rps", None
     return None, None

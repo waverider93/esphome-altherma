@@ -39,6 +39,8 @@ class AlthermaControl : public PollingComponent {
   void set_flow(sensor::Sensor *s) { this->flow_ = s; }
   void set_leaving(sensor::Sensor *s) { this->leaving_ = s; }
   void set_inlet(sensor::Sensor *s) { this->inlet_ = s; }
+  // Optional: with it, minimum run and pause count real compressor time, and stops of its own are recognised
+  void set_compressor(sensor::Sensor *s) { this->compressor_ = s; }
 #ifdef USE_BINARY_SENSOR
   void set_hot_water(binary_sensor::BinarySensor *s) { this->hot_water_ = s; }
 #endif
@@ -69,6 +71,7 @@ class AlthermaControl : public PollingComponent {
   void set_loss_sensor(sensor::Sensor *s) { this->loss_sensor_ = s; }
   void set_heat_sensor(sensor::Sensor *s) { this->heat_sensor_ = s; }
   void set_calibration_sensor(sensor::Sensor *s) { this->calibration_sensor_ = s; }
+  void set_self_stops_sensor(sensor::Sensor *s) { this->self_stops_sensor_ = s; }
 #ifdef USE_TEXT_SENSOR
   void set_reason_sensor(text_sensor::TextSensor *s) { this->reason_sensor_ = s; }
 #endif
@@ -89,18 +92,24 @@ class AlthermaControl : public PollingComponent {
   uint32_t changed_at_{0};
   uint32_t last_step_{0};
   uint32_t last_save_{0};
+  // compressor heating the house (not hot water): when it last started and stopped
+  bool compressor_heating_{false};
+  bool stopped_itself_{false};
+  uint32_t compressor_started_at_{0};
+  uint32_t compressor_stopped_at_{0};
+  uint32_t self_stops_{0};
   ESPPreferenceObject state_pref_;
   ESPPreferenceObject settings_pref_;
 
   sensor::Sensor *room_{nullptr}, *setpoint_{nullptr}, *outside_{nullptr};
-  sensor::Sensor *flow_{nullptr}, *leaving_{nullptr}, *inlet_{nullptr};
+  sensor::Sensor *flow_{nullptr}, *leaving_{nullptr}, *inlet_{nullptr}, *compressor_{nullptr};
 #ifdef USE_BINARY_SENSOR
   binary_sensor::BinarySensor *hot_water_{nullptr};
 #endif
   switch_::Switch *heat_request_{nullptr};
   switch_::Switch *cool_request_{nullptr};
   sensor::Sensor *deficit_sensor_{nullptr}, *ua_sensor_{nullptr}, *loss_sensor_{nullptr}, *heat_sensor_{nullptr},
-      *calibration_sensor_{nullptr};
+      *calibration_sensor_{nullptr}, *self_stops_sensor_{nullptr};
 #ifdef USE_TEXT_SENSOR
   text_sensor::TextSensor *reason_sensor_{nullptr};
 #endif

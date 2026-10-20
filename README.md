@@ -64,6 +64,7 @@ Options of `daikin_x10a`:
 | `refrigerant` | `auto` | For pressure to temperature conversions; `auto` takes it from the model. |
 | `protocol` | `I` | Only for raw values without a known model. |
 | `log_raw` | `false` | Logs every reply as hex. |
+| `all_values` | `false` | Every value of the model as an entity, besides the ones in the YAML. Not recommended values are diagnostic, hardware ids and EEPROM digits disabled. Needs a fixed `model`. |
 
 * `label` is a label of the definition files, in English or translated. When a label exists in several registers of
   the model, add `register:`. The labels are placed on the ESP: after a detection or a layout correction they follow
@@ -84,6 +85,21 @@ python3 components/daikin_x10a/catalog.py "ERGA E EHSH-X P30-50 E_EF series 04-0
 Full example with diagram, relays and fallback: [examples/altherma-ech2o.yaml](examples/altherma-ech2o.yaml).
 Control on the ESP (`altherma_control`: deficit controller with self-calibration, operating modes, fallbacks):
 [docs/control-concept.md](docs/control-concept.md).
+
+## Build and flash
+
+Either with the **ESPHome add-on (Device Builder) of Home Assistant**: copy `components/` next to your YAML (or point
+`external_components` at this repository) and install from there, by USB in the browser or over the air. No Python
+on your computer.
+
+Or on your computer with [uv](https://docs.astral.sh/uv/), which installs the pinned ESPHome from `uv.lock`:
+
+```sh
+uv run esphome run examples/altherma-ech2o.yaml          # build, flash by USB the first time, then over WiFi
+uv run esphome logs examples/altherma-ech2o.yaml
+```
+
+Heat pump field settings for the controller: [docs/heat-pump-settings.md](docs/heat-pump-settings.md).
 
 ## Diagram
 
@@ -106,7 +122,8 @@ Assistant is gone for 15 minutes. A dead ESP does the same, by the wiring:
 
 X12M carries 230 V: wiring by an electrician. The heat pump uses the contacts only with the field settings
 `[C-07]=1` (external room thermostat), `[C-05]=1` (one contact; `2` with separate heat/cool contacts) and
-`[D-01]=3` (Smart Grid). Check the relay pins of your board first.
+`[D-01]=3` (Smart Grid), see [docs/heat-pump-settings.md](docs/heat-pump-settings.md). Check the relay pins of your
+board first.
 
 ## Wiring
 
@@ -140,9 +157,9 @@ for t in test_survey test_detect test_layoutfix; do   # ESPAltherma's own tests,
   g++ -std=c++17 -w -DDAIKIN_X10A_ESPALTHERMA_IMPL -Itests/espaltherma -Icomponents/daikin_x10a \
     tests/espaltherma/$t.cpp -o /tmp/$t && /tmp/$t
 done
-esphome compile tests/compile-test.yaml      # no network
-python3 tools/make_compile_test.py           # the example without WiFi, for builds without downloads
-esphome compile tests/compile-diagram.yaml   # Ethernet, API, diagram, relays, control
+uv run esphome compile tests/compile-test.yaml      # no network
+python3 tools/make_compile_test.py                  # the example without WiFi, for builds without downloads
+uv run esphome compile tests/compile-diagram.yaml   # Ethernet, API, diagram, relays, control, all values
 ```
 
 ## License

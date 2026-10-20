@@ -20,6 +20,7 @@ CONF_FLOW = "flow"
 CONF_LEAVING = "leaving_water_temperature"
 CONF_INLET = "inlet_water_temperature"
 CONF_HOT_WATER = "hot_water_valve"
+CONF_COMPRESSOR = "compressor_frequency"
 CONF_HEAT_REQUEST = "heat_request"
 CONF_COOL_REQUEST = "cool_request"
 CONF_UA = "ua"
@@ -42,6 +43,8 @@ CONFIG_SCHEMA = cv.Schema(
         cv.Required(CONF_LEAVING): cv.use_id(sensor.Sensor),
         cv.Required(CONF_INLET): cv.use_id(sensor.Sensor),
         cv.Optional(CONF_HOT_WATER): cv.use_id(binary_sensor.BinarySensor),
+        # Recommended: minimum run and pause then count real compressor time, and stops of its own are recognised
+        cv.Optional(CONF_COMPRESSOR): cv.use_id(sensor.Sensor),
         # The relay it switches (on = heat request), and the cool request it leaves alone while on
         cv.Required(CONF_HEAT_REQUEST): cv.use_id(switch.Switch),
         cv.Optional(CONF_COOL_REQUEST): cv.use_id(switch.Switch),
@@ -67,6 +70,7 @@ async def to_code(config):
         (CONF_LEAVING, "set_leaving"),
         (CONF_INLET, "set_inlet"),
         (CONF_HOT_WATER, "set_hot_water"),
+        (CONF_COMPRESSOR, "set_compressor"),
         (CONF_HEAT_REQUEST, "set_heat_request"),
         (CONF_COOL_REQUEST, "set_cool_request"),
     ):

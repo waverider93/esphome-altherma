@@ -1,0 +1,12 @@
+[project]
+name = "esphome-altherma"
+version = "0.1.0"
+description = "ESPHome component for Daikin Altherma heat pumps on the X10A port"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.15"
+# Only for building and flashing on your own computer. The ESPHome add-on of Home Assistant needs none of this.
+dependencies = ["esphome==2026.9.1"]
+
+[tool.uv]
+package = false

@@ -361,31 +361,38 @@ const CTL = {
     ua: 'UA (W/K), {n} calibrations, next in {h} h', how: 'How it works',
     reasons: {'deficit reached': 'deficit reached', 'deficit covered': 'deficit covered', 'minimum run time': 'minimum run time',
       'minimum pause': 'minimum pause', 'no demand': 'no demand', 'deficit not covered': 'deficit not yet covered',
-      'room below setpoint': 'room too cold', 'room above setpoint': 'room too warm', 'no room, setpoint or outside temperature': 'no values from the heat pump: heating curve'},
+      'room below setpoint': 'room too cold', 'room above setpoint': 'room too warm', 'no room, setpoint or outside temperature': 'no values from the heat pump: heating curve',
+      'waiting for the compressor': 'waiting for the compressor', 'heat pump stopped itself': 'heat pump stopped itself (flow temperature limit)'},
+    stops: 'Stops of its own since start: {n}',
     text: `<p>The house loses heat all the time; the heat pump delivers it in a few long runs instead of many short ones.</p><ul>
 <li><b>Deficit</b>: heat the house is missing, in kWh. Every minute it grows by the heat loss (UA × (room − outside)) and shrinks by the heat delivered (flow × (leaving − return water)). Hot water does not count.</li>
 <li><b>Start</b> at {start} kWh after a pause of at least {pause} h, <b>stop</b> at {stop} kWh after a run of at least {run} h. That prevents cycling.</li>
 <li><b>Room correction</b>: the deficit is pulled slowly towards {gain} kWh per kelvin below the setpoint, so errors do not add up. Room more than {low} K below the setpoint: on at once; more than {high} K above: off at once.</li>
 <li><b>UA</b> learns itself: every 72 h from the heat delivered, when the room ended as warm as it started. Sun and appliances are inside it on average. Kept in flash, also over a power cut.</li>
+<li>Minimum run and pause count real compressor time. If the heat pump stops on its own (flow temperature limit) and the deficit is below the start value, the request ends too, so the pause starts at once.</li>
 <li>Without values from the heat pump, the heat request stays on and the heat pump follows its heating curve. If the ESP fails, the relay does the same.</li></ul>`},
   de: {title: 'Regelung', active: 'Der ESP schaltet die Heizanforderung', passive: 'Home Assistant schaltet die Heizanforderung, der ESP rechnet nur mit',
     on: 'Heizanforderung an', off: 'Heizanforderung aus', deficit: 'Defizit (kWh)', loss: 'Wärmeverlust jetzt (kW)', heat: 'Heizleistung jetzt (kW)',
     ua: 'UA (W/K), {n} Kalibrierungen, nächste in {h} h', how: 'So funktioniert es',
     reasons: {'deficit reached': 'Defizit erreicht', 'deficit covered': 'Defizit gedeckt', 'minimum run time': 'Mindestlaufzeit',
       'minimum pause': 'Mindestpause', 'no demand': 'kein Bedarf', 'deficit not covered': 'Defizit noch nicht gedeckt',
-      'room below setpoint': 'Raum zu kalt', 'room above setpoint': 'Raum zu warm', 'no room, setpoint or outside temperature': 'keine Werte von der WP: Heizkurve'},
+      'room below setpoint': 'Raum zu kalt', 'room above setpoint': 'Raum zu warm', 'no room, setpoint or outside temperature': 'keine Werte von der WP: Heizkurve',
+      'waiting for the compressor': 'warte auf den Verdichter', 'heat pump stopped itself': 'WP hat selbst gestoppt (Vorlaufgrenze)'},
+    stops: 'Eigenstopps der WP seit Start: {n}',
     text: `<p>Das Haus verliert ständig Wärme. Die WP liefert sie in wenigen langen Läufen statt in vielen kurzen.</p><ul>
 <li><b>Defizit</b>: die Wärme, die dem Haus fehlt, in kWh. Jede Minute wächst es um den Wärmeverlust (UA × (Raum − Außen)) und sinkt um die gelieferte Heizwärme (Durchfluss × (Vorlauf − Rücklauf)). Warmwasser zählt nicht.</li>
 <li><b>Start</b> bei {start} kWh nach mindestens {pause} h Pause, <b>Stopp</b> bei {stop} kWh nach mindestens {run} h Lauf. Das verhindert das Takten.</li>
 <li><b>Raumkorrektur</b>: Das Defizit wird langsam zu {gain} kWh je Kelvin unter Soll gezogen, so summieren sich Fehler nicht auf. Raum mehr als {low} K unter Soll: sofort an, mehr als {high} K über Soll: sofort aus.</li>
 <li><b>UA</b> lernt sich selbst: alle 72 h aus der gelieferten Wärme, wenn der Raum am Ende so warm war wie am Anfang. Sonne und Geräte stecken im Mittel mit drin. Bleibt im Flash, auch nach einem Stromausfall.</li>
+<li>Mindestlauf und -pause zählen echte Verdichterzeit. Stoppt die WP selbst (Vorlaufgrenze) und liegt das Defizit unter dem Startwert, endet auch die Anforderung, damit die Pause sofort beginnt.</li>
 <li>Ohne Werte von der WP bleibt die Heizanforderung an, die WP fährt nach Heizkurve. Fällt der ESP aus, tut das Relais dasselbe.</li></ul>`}
 };
 function renderControl(c) {
   const box = $('#ctl'); box.hidden = !c; if (!c) return;
   const L = CTL[lang] || CTL.en, f = v => v == null ? '—' : (+v).toLocaleString(lang, {maximumFractionDigits: 2});
   tx('cTitle', L.title);
-  tx('cState', (c.active ? L.active : L.passive) + ' · ' + (c.request ? L.on : L.off) + (c.active && c.reason ? ' (' + (L.reasons[c.reason] || c.reason) + ')' : ''));
+  tx('cState', (c.active ? L.active : L.passive) + ' · ' + (c.request ? L.on : L.off) + (c.active && c.reason ? ' (' + (L.reasons[c.reason] || c.reason) + ')' : '')
+    + (c.compressor != null ? ' · ' + L.stops.replace('{n}', c.self_stops) : ''));
   tx('cDef', f(c.deficit)); tx('cDefL', L.deficit); tx('cLoss', f(c.loss)); tx('cLossL', L.loss); tx('cHeat', f(c.heat)); tx('cHeatL', L.heat);
   tx('cUa', f(Math.round(c.ua))); tx('cUaL', L.ua.replace('{n}', c.calibrations).replace('{h}', Math.round(c.calibration_left)));
   const lo = Math.min(c.stop, c.deficit) - 1, hi = Math.max(c.start, c.deficit) + 1, x = v => ((v - lo) / (hi - lo) * 100).toFixed(1) + '%';

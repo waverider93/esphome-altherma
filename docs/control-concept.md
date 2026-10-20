@@ -78,16 +78,23 @@ window from that value.
 | Minimum run time | 2 h |
 | Minimum pause | 1 h |
 | Room gain k | 5 kWh/K |
-| Room too cold | room < setpoint - 0.5 K: on at once (`room_low` in the YAML) |
-| Room too warm | room > setpoint + 1 K: off at once, even within the minimum run time (`room_high`) |
+| Room too cold | room < setpoint - 0.5 K: on at once (`room_low` in the YAML); the deficit is raised to k x (setpoint - room) |
+| Room too warm | room > setpoint + 1 K: off at once, even within the minimum run time (`room_high`); an open deficit is dropped to k x (setpoint - room) |
+| Heat pump stopped itself | compressor off for 5 min during the request and deficit < start: request off, the pause starts |
 | Hot water | left to the heat pump |
 
-Start threshold, minimum run time and minimum pause prevent the cycling. Daikin's own stops remain: the overshoot
-`[9-04]` ends a run when the leaving water reaches its target + 4 K. Only a fitting heating curve helps there, not
-the relay.
+Start threshold, minimum run time and minimum pause prevent the cycling. With `compressor_frequency` set (in the
+example), run and pause count real compressor time: a run starts when the compressor does, not the relay, and a
+pause when it stops.
+
+At the room limits the room is right and the model is not. Without the correction a warm room would end a run with
+deficit left, and the next start would follow right after the minimum pause.
+
+Daikin's own stops remain: the overshoot `[9-04]` ends a run when the leaving water reaches its target + 4 K. The
+controller counts them (`self_stops`) and ends its request too, so the heat pump does not restart on its own a few
+minutes later. Fewer of them need a fitting heating curve.
 
 ## Field settings
 
-`[C-07]=1` (external room thermostat; the Madoka stays control panel and sensor), `[C-05]=1` (one contact: H asks,
-heating or cooling is chosen in software; `2` with separate heat and cool contacts), `[D-01]=3` (Smart Grid on
-X15M 3-4 / 5-6). Check the heating curve and `[4-02]` before switching over.
+See [heat-pump-settings.md](heat-pump-settings.md): order of the switch-over, every setting with its reason, and how
+to go back.

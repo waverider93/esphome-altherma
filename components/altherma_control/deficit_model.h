@@ -65,8 +65,10 @@ class DeficitModel {
     return in.flow_l_min / 60.0f * 4.18f * (in.leaving - in.inlet);
   }
 
-  // One step of dt_h hours. running: the heat request is on; on_h: hours since it last changed.
-  Decision step(const Inputs &in, float dt_h, bool running, float on_h) {
+  // One step of dt_h hours. running: the heat request is on; on_h: hours since it last changed (or, with the
+  // compressor known, hours of compressor run or pause). stopped_itself: the heat pump stopped its compressor on its
+  // own during the request (flow temperature limit [9-04]) and has stayed off for a few minutes.
+  Decision step(const Inputs &in, float dt_h, bool running, float on_h, bool stopped_itself = false) {
     if (std::isnan(in.room) || std::isnan(in.outside) || std::isnan(in.setpoint)) {
       this->reason = "no room, setpoint or outside temperature";
       this->state.window_invalid_h += dt_h;
@@ -89,6 +91,12 @@ class DeficitModel {
     float target = this->params.room_gain_kwh_k * (in.setpoint - in.room);
     if (this->params.anchor_h > 0)
       s.deficit_kwh += (target - s.deficit_kwh) * std::fmin(1.0f, dt_h / this->params.anchor_h);
+    // Outside the room limits the room is right and the model is not: the deficit jumps to what the room says,
+    // so it does not start again right after a stop for a warm room (or stop right after a start for a cold one)
+    if (in.room > in.setpoint + this->params.room_high_k)
+      s.deficit_kwh = std::fmin(s.deficit_kwh, target);
+    else if (in.room < in.setpoint - this->params.room_low_k)
+      s.deficit_kwh = std::fmax(s.deficit_kwh, target);
     s.deficit_kwh = std::fmax(-10.0f, std::fmin(15.0f, s.deficit_kwh));
 
     this->calibrate_(in, dt_h);
@@ -101,6 +109,12 @@ class DeficitModel {
       }
       if (s.deficit_kwh <= p.stop_kwh && on_h >= p.min_run_h) {
         this->reason = "deficit covered";
+        return Decision::STOP;
+      }
+      // It stopped itself anyway: end the request too, so the pause starts now instead of the heat pump starting
+      // again on its own a few minutes later. Not when the house still clearly needs heat.
+      if (stopped_itself && s.deficit_kwh < p.start_kwh) {
+        this->reason = "heat pump stopped itself";
         return Decision::STOP;
       }
       this->reason = on_h < p.min_run_h ? "minimum run time" : "deficit not covered";

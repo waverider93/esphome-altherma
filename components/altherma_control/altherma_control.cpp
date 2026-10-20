@@ -33,6 +33,8 @@ void AlthermaControl::setup() {
   // After a reboot neither the minimum run time nor the pause holds anything back
   float hold_h = std::fmax(this->model_.params.min_run_h, this->model_.params.min_pause_h);
   this->changed_at_ = millis() - (uint32_t) (hold_h * 3600000.0f);
+  this->compressor_started_at_ = this->changed_at_;
+  this->compressor_stopped_at_ = this->changed_at_;
   this->last_running_ = this->heat_request_ != nullptr && this->heat_request_->state;
   this->last_step_ = millis();
   this->last_save_ = millis();
@@ -43,6 +45,8 @@ void AlthermaControl::dump_config() {
   const Params &p = this->model_.params;
   ESP_LOGCONFIG(TAG, "Altherma control:");
   ESP_LOGCONFIG(TAG, "  Active: %s", YESNO(this->active_));
+  ESP_LOGCONFIG(TAG, "  Compressor: %s", this->compressor_ != nullptr ? "run and pause count compressor time"
+                                                                     : "not set, run and pause count relay time");
   ESP_LOGCONFIG(TAG, "  Start %.1f kWh, stop %.1f kWh, minimum run %.1f h, minimum pause %.1f h", p.start_kwh,
                 p.stop_kwh, p.min_run_h, p.min_pause_h);
   ESP_LOGCONFIG(TAG, "  UA %.0f W/K, room gain %.1f kWh/K, calibration window %.0f h", this->model_.state.ua_w_k,
@@ -147,6 +151,7 @@ std::string AlthermaControl::json() const {
   s += ",\"room_gain\":" + num(p.room_gain_kwh_k) + ",\"ua\":" + num(st.ua_w_k);
   s += ",\"calibrations\":" + std::to_string(st.calibrations);
   s += ",\"calibration_left\":" + num(this->model_.calibration_left_h());
+  s += ",\"compressor\":" + num(value_(this->compressor_)) + ",\"self_stops\":" + std::to_string(this->self_stops_);
   s += ",\"loss\":" + num(this->model_.loss_kw) + ",\"heat\":" + num(this->model_.heat_kw);
   s += ",\"room_low\":" + num(p.room_low_k) + ",\"room_high\":" + num(p.room_high_k) + "}";
   return s;
@@ -164,7 +169,40 @@ void AlthermaControl::update() {
     this->changed_at_ = now;  // switched by someone else (Home Assistant, by hand) counts too
     this->last_running_ = running;
   }
-  float on_h = (now - this->changed_at_) / 3600000.0f;
+
+  bool hot_water = false;
+#ifdef USE_BINARY_SENSOR
+  hot_water = this->hot_water_ != nullptr && this->hot_water_->has_state() && this->hot_water_->state;
+#endif
+  float hz = value_(this->compressor_);
+  float on_h;
+  if (std::isnan(hz)) {
+    on_h = (now - this->changed_at_) / 3600000.0f;
+    this->stopped_itself_ = false;
+  } else {
+    // Hot water runs are not heating runs
+    bool heating = hz > 0 && !hot_water;
+    if (heating && !this->compressor_heating_) {
+      this->compressor_started_at_ = now;
+      this->stopped_itself_ = false;
+    } else if (!heating && this->compressor_heating_) {
+      this->compressor_stopped_at_ = now;
+      if (running && hz <= 0 && !hot_water) {
+        this->self_stops_++;
+        ESP_LOGI(TAG, "The heat pump stopped its compressor itself during the heat request");
+      }
+    }
+    this->compressor_heating_ = heating;
+    // Run: continuous compressor time (0 while it has not started yet). Pause: time since it stopped.
+    if (running)
+      on_h = heating ? (now - this->compressor_started_at_) / 3600000.0f : 0.0f;
+    else
+      on_h = heating ? 0.0f : (now - this->compressor_stopped_at_) / 3600000.0f;
+    // Off for 5 minutes during the request, after it had run in it: a stop of its own, not the start delay
+    this->stopped_itself_ = running && !heating && hz <= 0 && !hot_water &&
+                            (int32_t) (this->compressor_stopped_at_ - this->changed_at_) > 0 &&
+                            now - this->compressor_stopped_at_ > 5 * 60 * 1000;
+  }
 
   Inputs in;
   in.room = value_(this->room_);
@@ -173,11 +211,11 @@ void AlthermaControl::update() {
   in.flow_l_min = value_(this->flow_);
   in.leaving = value_(this->leaving_);
   in.inlet = value_(this->inlet_);
-#ifdef USE_BINARY_SENSOR
-  in.hot_water = this->hot_water_ != nullptr && this->hot_water_->has_state() && this->hot_water_->state;
-#endif
+  in.hot_water = hot_water;
   float ua_before = this->model_.state.ua_w_k;
-  Decision d = this->model_.step(in, dt_h, running, on_h);
+  Decision d = this->model_.step(in, dt_h, running, on_h, this->stopped_itself_);
+  if (d == Decision::KEEP && running && !std::isnan(hz) && !this->compressor_heating_ && !hot_water)
+    this->model_.reason = this->stopped_itself_ ? "heat pump stopped itself" : "waiting for the compressor";
 
   bool cooling = this->cool_request_ != nullptr && this->cool_request_->state;
   if (this->active_ && !cooling && this->heat_request_ != nullptr) {
@@ -203,6 +241,8 @@ void AlthermaControl::update() {
     this->heat_sensor_->publish_state(this->model_.heat_kw);
   if (this->calibration_sensor_ != nullptr)
     this->calibration_sensor_->publish_state(this->model_.calibration_left_h());
+  if (this->self_stops_sensor_ != nullptr)
+    this->self_stops_sensor_->publish_state(this->self_stops_);
 #ifdef USE_TEXT_SENSOR
   if (this->reason_sensor_ != nullptr)
     this->reason_sensor_->publish_state(this->active_ ? this->model_.reason : "passive");

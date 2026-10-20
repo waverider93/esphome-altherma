@@ -117,6 +117,8 @@
   "ua": 91,
   "calibrations": 3,
   "calibration_left": 41.5,
+  "compressor": 0,
+  "self_stops": 1,
   "loss": 1.48,
   "heat": 0.0,
   "room_low": 0.5,

@@ -55,6 +55,7 @@ daikin_x10a:
   model: "ERGA E EHSH-X P30-50 E_EF series 04-08kW-ECH2O"
   language: de        # entity names without name: and the diagram page
   diagram: true       # drawing of the installation on http://altherma.local/altherma/
+  all_values: true    # every other value of the model too (Home Assistant: diagnostic, a few disabled)
   update_interval: 30s
   # true logs every reply as hex, for comparing with ESPAltherma
   log_raw: false
@@ -97,6 +98,7 @@ sensor:
     label: "Flow sensor (l/min)"
     name: Durchfluss
   - platform: daikin_x10a
+    id: compressor
     label: "INV frequency (rps)"
     name: Verdichter
     accuracy_decimals: 0
@@ -111,6 +113,7 @@ sensor:
   - {platform: altherma_control, type: heat_loss, name: Regler Wärmeverlust}
   - {platform: altherma_control, type: heat_delivered, name: Regler Heizleistung}
   - {platform: altherma_control, type: calibration_left, name: Regler nächste Kalibrierung}
+  - {platform: altherma_control, type: self_stops, name: Regler Eigenstopps WP}
 
 binary_sensor:
   - platform: daikin_x10a
@@ -180,6 +183,7 @@ altherma_control:
   leaving_water_temperature: leaving_water
   inlet_water_temperature: inlet_water
   hot_water_valve: hot_water_valve
+  compressor_frequency: compressor  # run and pause count real compressor time
   heat_request: heat_relay
   cool_request: cool_relay
   ua: 90               # start value in W/K; learned from then on, kept in flash

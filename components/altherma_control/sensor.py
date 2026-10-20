@@ -14,6 +14,8 @@ TYPES = {
     "heat_loss": ("set_loss_sensor", "kW", 2, DEVICE_CLASS_POWER),
     "heat_delivered": ("set_heat_sensor", "kW", 2, DEVICE_CLASS_POWER),
     "calibration_left": ("set_calibration_sensor", "h", 1, None),
+    # stops of its own during a heat request since boot (needs compressor_frequency)
+    "self_stops": ("set_self_stops_sensor", None, 0, None),
 }
 
 CONFIG_SCHEMA = sensor.sensor_schema(state_class=STATE_CLASS_MEASUREMENT).extend(
@@ -28,7 +30,10 @@ async def to_code(config):
     parent = await cg.get_variable(config[CONF_ALTHERMA_CONTROL_ID])
     setter, unit, decimals, device_class = TYPES[config[CONF_TYPE]]
     config = dict(config)
-    config.setdefault("unit_of_measurement", unit)
+    if unit:
+        config.setdefault("unit_of_measurement", unit)
+    else:
+        config["state_class"] = sensor.validate_state_class("total_increasing")
     config.setdefault("accuracy_decimals", decimals)
     if device_class:
         config.setdefault("device_class", sensor.validate_device_class(device_class))

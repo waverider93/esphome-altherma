@@ -24,6 +24,7 @@ CONF_DIAGRAM = "diagram"
 CONF_PROTOCOL = "protocol"
 CONF_REFRIGERANT = "refrigerant"
 CONF_LOG_RAW = "log_raw"
+CONF_ALL_VALUES = "all_values"
 CONF_LABEL = "label"
 CONF_REGISTER = "register"
 CONF_OFFSET = "offset"
@@ -50,6 +51,8 @@ def _validate_model(value):
 def _validate_hub(config):
     if config[CONF_MODEL] == AUTO and not config[CONF_DETECT]:
         raise cv.Invalid("model: auto needs detect: true")
+    if config[CONF_ALL_VALUES] and config[CONF_MODEL] == AUTO:
+        raise cv.Invalid("all_values: true needs a fixed model (the entities are made when building)")
     return config
 
 
@@ -71,6 +74,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_PROTOCOL, default="I"): cv.one_of("I", "S", upper=True),
             cv.Optional(CONF_REFRIGERANT, default="AUTO"): cv.enum(REFRIGERANTS, upper=True),
             cv.Optional(CONF_LOG_RAW, default=False): cv.boolean,
+            # Every value of the model as an entity, besides the ones in the YAML (needs a fixed model)
+            cv.Optional(CONF_ALL_VALUES, default=False): cv.boolean,
         }
     )
     .extend(cv.polling_component_schema("30s"))
@@ -109,6 +114,92 @@ async def to_code(config):
         cg.add_define("USE_DAIKIN_X10A_DIAGRAM")
         base = await cg.get_variable(CORE.config["web_server_base"][CONF_ID])
         cg.add(var.set_web_server_base(base))
+    if config[CONF_ALL_VALUES]:
+        await _all_values(var, config)
+
+
+# Values that only describe the hardware or the data frame: made, but disabled in Home Assistant
+_NOISE_REGISTERS = (0x00, 0x11)
+_NOISE_CONVERSIONS = (214, 215)
+_NOISE_LABELS = ("Data Enable/Disable", "Indoor Unit Address")
+
+
+def _declared(hub_id, model):
+    """(register, label) of the values the YAML declares for this hub, and the names it uses."""
+    values, names = set(), set()
+    for domain in ("sensor", "binary_sensor", "text_sensor"):
+        for conf in CORE.config.get(domain, []):
+            if CONF_NAME in conf and conf[CONF_NAME]:
+                names.add(str(conf[CONF_NAME]))
+            if conf.get("platform") != "daikin_x10a" or str(conf.get(CONF_DAIKIN_X10A_ID)) != str(hub_id):
+                continue
+            if CONF_LABEL in conf:
+                for e in catalog.find_label(model, conf[CONF_LABEL], conf.get(CONF_REGISTER)):
+                    values.add((e.registry, e.label))
+            elif CONF_REGISTER in conf:
+                values.add((conf[CONF_REGISTER], None, conf.get(CONF_OFFSET)))
+    return values, names
+
+
+async def _all_values(hub, config):
+    """Makes an entity for every value of the model that the YAML does not declare itself."""
+    from esphome.components import binary_sensor, sensor, text_sensor
+    from esphome.const import (
+        CONF_DEVICE_CLASS,
+        CONF_DISABLED_BY_DEFAULT,
+        CONF_ENTITY_CATEGORY,
+        CONF_STATE_CLASS,
+        CONF_UNIT_OF_MEASUREMENT,
+        ENTITY_CATEGORY_DIAGNOSTIC,
+    )
+
+    from .sensor import _defaults
+
+    model = catalog.find_model(config[CONF_MODEL])
+    language = config[CONF_LANGUAGE]
+    declared, names = _declared(config[CONF_ID], model)
+    entries = [e for e in catalog.entries(model) if (e.registry, e.label) not in declared]
+    seen = set()
+    count = {}
+    for e in entries:
+        count[catalog.translate(e.label, language)] = count.get(catalog.translate(e.label, language), 0) + 1
+    made = 0
+    for e in entries:
+        if (e.registry, e.label) in seen:
+            continue  # the same label twice in one register: the ESP would resolve both to the first
+        seen.add((e.registry, e.label))
+        name = catalog.translate(e.label, language)
+        if count[name] > 1 or name in names:
+            name = f"{name} (0x{e.registry:02X})"
+        if name in names:
+            name = f"{name} {e.offset}"
+        names.add(name)
+        conf = {
+            CONF_ID: f"{config[CONF_ID].id}_r{e.registry:02x}_{e.offset}_{e.conv}",
+            CONF_NAME: entity_name(name),
+            CONF_DISABLED_BY_DEFAULT: e.registry in _NOISE_REGISTERS or e.conv in _NOISE_CONVERSIONS
+            or e.label in _NOISE_LABELS,
+        }
+        if not e.recommended:
+            conf[CONF_ENTITY_CATEGORY] = ENTITY_CATEGORY_DIAGNOSTIC
+        if is_bool_conversion(e.conv):
+            var = await binary_sensor.new_binary_sensor(binary_sensor.binary_sensor_schema()(conf))
+            method = "add_binary_sensor"
+        elif is_number_conversion(e.conv):
+            unit, device_class = _defaults(e.label, e.conv)
+            if unit:
+                conf[CONF_UNIT_OF_MEASUREMENT] = unit
+                conf[CONF_STATE_CLASS] = "measurement"
+            if device_class:
+                conf[CONF_DEVICE_CLASS] = device_class
+            var = await sensor.new_sensor(sensor.sensor_schema(accuracy_decimals=1)(conf))
+            method = "add_sensor"
+        else:
+            var = await text_sensor.new_text_sensor(text_sensor.text_sensor_schema()(conf))
+            method = "add_text_sensor"
+        cg.add(getattr(hub, method)(var, e.label, e.registry, 0, 0, 0, 0))
+        made += 1
+    return made
 
 
 # --- Shared by the sensor, binary_sensor and text_sensor platforms ---
@@ -137,6 +228,11 @@ def _raw_hub(hub_id=None):
     return hubs[0] if hubs else {}
 
 
+def entity_name(name):
+    """ESPHome reserves '/' in entity names (URL paths): the same look with a fraction slash."""
+    return name.replace("/", "\u2044")
+
+
 def default_name(config):
     """Entities with a label get the label's name in the hub language when the YAML gives no name."""
     if isinstance(config, dict) and CONF_LABEL in config and CONF_NAME not in config:
@@ -144,7 +240,7 @@ def default_name(config):
         en = catalog.english(str(config[CONF_LABEL]))
         if en is not None:
             config = dict(config)
-            config[CONF_NAME] = catalog.translate(en, str(hub.get(CONF_LANGUAGE, "en")).lower())
+            config[CONF_NAME] = entity_name(catalog.translate(en, str(hub.get(CONF_LANGUAGE, "en")).lower()))
     return config
 
 

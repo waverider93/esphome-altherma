@@ -88,7 +88,23 @@ int main() {
     m.state.deficit_kwh = -1;
     assert(m.step(in, 1.0f / 60, true, 0.5f) == Decision::KEEP);
     in.room = 22.6f;
+    m.state.deficit_kwh = 2;
     assert(m.step(in, 1.0f / 60, true, 0.5f) == Decision::STOP);
+    // the open deficit is dropped: the warm room says there is none
+    assert(m.state.deficit_kwh < 0);
+  }
+  // The heat pump stopped itself: the request ends too, unless the house still needs a lot
+  {
+    DeficitModel m;
+    Inputs in;
+    in.room = 21.5f;
+    in.setpoint = 21.5f;
+    in.outside = 10;
+    m.state.deficit_kwh = 1;
+    assert(m.step(in, 1.0f / 60, true, 0.0f, true) == Decision::STOP);
+    m.state.deficit_kwh = 4;
+    m.state.last_setpoint = NAN;
+    assert(m.step(in, 1.0f / 60, true, 0.0f, true) == Decision::KEEP);
   }
   printf("deficit model ok\n");
   return 0;
