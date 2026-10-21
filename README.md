@@ -88,16 +88,9 @@ Control on the ESP (`altherma_control`: deficit controller with self-calibration
 
 ## Build and flash
 
-Either with the **ESPHome add-on (Device Builder) of Home Assistant**: copy `components/` next to your YAML (or point
-`external_components` at this repository) and install from there, by USB in the browser or over the air. No Python
-on your computer.
-
-Or on your computer with [uv](https://docs.astral.sh/uv/), which installs the pinned ESPHome from `uv.lock`:
-
-```sh
-uv run esphome run examples/altherma-ech2o.yaml          # build, flash by USB the first time, then over WiFi
-uv run esphome logs examples/altherma-ech2o.yaml
-```
+[docs/flashing.md](docs/flashing.md): with the ESPHome add-on of Home Assistant (no tools on your computer), or on
+your computer with [uv](https://docs.astral.sh/uv/) (`uv run esphome run examples/altherma-ech2o.yaml`, pinned
+ESPHome from `uv.lock`), flashing a ready image, a test without the heat pump, and troubleshooting.
 
 Heat pump field settings for the controller: [docs/heat-pump-settings.md](docs/heat-pump-settings.md).
 

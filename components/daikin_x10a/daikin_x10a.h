@@ -138,6 +138,7 @@ class DaikinX10A : public PollingComponent, public uart::UARTDevice {
 
   Converter converter_;
   std::vector<Label> labels_;
+  bool web_start_pending_{false};
   std::vector<uint8_t> registries_;
   size_t current_{0};
   State state_{State::IDLE};

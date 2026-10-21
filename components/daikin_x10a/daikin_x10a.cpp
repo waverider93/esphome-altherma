@@ -146,8 +146,10 @@ void DaikinX10A::setup() {
      protected:
       DaikinX10A *hub_;
     };
-    // web_server starts the server; the handler is picked up then
     this->base_->add_handler(new Handler(this));  // NOLINT(cppcoreguidelines-owning-memory)
+    // Start the server ourselves: without web_server (the ESPHome dashboard) nobody else does. Counted, so a
+    // web_server that starts it too does no harm. Only after setup: the network stack must exist (see loop()).
+    this->web_start_pending_ = true;
   }
 #endif
 }
@@ -543,6 +545,12 @@ void DaikinX10A::send_query_() {
 }
 
 void DaikinX10A::loop() {
+#ifdef USE_DAIKIN_X10A_DIAGRAM
+  if (this->web_start_pending_ && App.is_setup_complete()) {
+    this->web_start_pending_ = false;
+    this->base_->init();
+  }
+#endif
   if (this->survey_pending_ && this->state_ == State::IDLE && (int32_t) (millis() - this->survey_at_) >= 0) {
     this->run_survey_();
     return;
