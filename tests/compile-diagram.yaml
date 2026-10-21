@@ -38,6 +38,8 @@ logger:
 
 # Optional: the control runs without Home Assistant
 api:
+  # ESPHome reboots after 15 min without Home Assistant by default; the control must keep running instead
+  reboot_timeout: 0s
 
 uart:
   id: x10a_uart
