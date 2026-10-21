@@ -69,8 +69,8 @@ For an image built elsewhere (`firmware.factory.bin`, or the "Factory format" do
 * **Terminal:**
 
   ```sh
-  uvx esptool --chip esp32 erase-flash                       # optional: also clears stored settings
-  uvx esptool --chip esp32 write-flash 0x0 firmware.factory.bin
+  uvx --from "esptool>=5" esptool --chip esp32 erase-flash                       # optional: also clears stored settings
+  uvx --from "esptool>=5" esptool --chip esp32 write-flash 0x0 firmware.factory.bin
   ```
 
 `erase-flash` also deletes what the ESP keeps in flash: the learned UA, the deficit and the controller settings.
