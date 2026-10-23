@@ -99,7 +99,13 @@ Heat pump field settings for the controller: [docs/heat-pump-settings.md](docs/h
 `diagram: true` adds a page with the drawing of the installation from ESPAltherma's web interface: outdoor unit,
 water circuit coloured by temperature, 3-way valve, tank, room, pressure gauge, the state panel and all values. It
 works without Home Assistant, light and dark, on a phone too. Open `http://<device>/altherma/`. The page is
-`web/altherma.html`; after changing it, run `python3 tools/embed_diagram.py`.
+`web/altherma.html`; after changing it, run `python3 tools/embed_diagram.py` and `python3 tools/make_ha_card.py`.
+
+The same page as a Home Assistant card: `web/altherma-card.js` (`type: custom:altherma-card`, `device: altherma`,
+`control: esphome`). Copy it to `/config/www/` and add `/local/altherma-card.js` as a dashboard resource (JavaScript
+module); the options are at the top of the file. It reads the entities instead of `values.json`, so it works through
+Home Assistant's remote access too. `values: p1p2` shows the values of a P1P2MQTT bridge instead, before the ESP is
+installed.
 
 ## Relays
 
