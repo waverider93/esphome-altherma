@@ -100,11 +100,7 @@ void AlthermaControl::set_setting(Setting s, float value) {
     case Setting::UA:
       // Set by hand: the learning goes on from here, in a fresh window
       this->model_.state.ua_w_k = value;
-      this->model_.state.window_h = 0;
-      this->model_.state.window_kh = 0;
-      this->model_.state.window_heat_kwh = 0;
-      this->model_.state.window_invalid_h = 0;
-      this->model_.state.window_room_start = NAN;
+      this->model_.clear_window();
       this->state_pref_.save(&this->model_.state);
       break;
   }

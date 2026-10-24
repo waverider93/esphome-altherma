@@ -4,7 +4,8 @@
 //
 // Every step: deficit += (UA x (room - outside) - heat delivered) x dt, pulled slowly towards k x (setpoint - room).
 // UA learns itself from the heat delivered over a few days ("effective" UA: average gains are inside), with the heat
-// the floor stored or gave back over the window (k x room change) taken out.
+// the floor stored or gave back over the window (k x room change) taken out. The window slides: every day it looks
+// back over the last three days.
 
 #include <cmath>
 #include <cstdint>
@@ -21,21 +22,27 @@ struct Params {
   float anchor_h{12.0f};        // time constant of the pull towards the target
   float room_low_k{0.5f};       // room below setpoint - this: on at once
   float room_high_k{1.0f};      // room above setpoint + this: off at once
-  float calibration_h{72.0f};   // length of a calibration window
+  float calibration_h{72.0f};   // length of a calibration window; it moves on by a third of this
 };
 
 // Everything that must survive a reboot
 struct State {
-  uint32_t version{2};
+  uint32_t version{3};
   float ua_w_k{60.0f};
   float deficit_kwh{0.0f};
   float last_setpoint{NAN};
-  // calibration window
+  // calibration window: the running third, and the last three finished thirds (index 0 the newest)
   float window_h{0.0f};
   float window_heat_kwh{0.0f};
   float window_kh{0.0f};  // sum of (room - outside) x hours
   float window_room_start{NAN};
   float window_invalid_h{0.0f};
+  uint32_t parts{0};  // finished thirds kept, up to 3
+  float part_h[3]{};
+  float part_heat_kwh[3]{};
+  float part_kh[3]{};
+  float part_room_start[3]{NAN, NAN, NAN};
+  float part_invalid_h[3]{};
   uint32_t calibrations{0};
 };
 
@@ -133,8 +140,18 @@ class DeficitModel {
     return Decision::KEEP;
   }
 
-  // Hours left in the calibration window
-  float calibration_left_h() const { return std::fmax(0.0f, this->params.calibration_h - this->state.window_h); }
+  // Hours to the next calibration
+  float calibration_left_h() const {
+    return std::fmax(0.0f, this->params.calibration_h / 3 - this->state.window_h);
+  }
+
+  // Start over: a fresh window (after UA was set by hand)
+  void clear_window() {
+    State &s = this->state;
+    s.window_h = s.window_kh = s.window_heat_kwh = s.window_invalid_h = 0;
+    s.window_room_start = NAN;
+    s.parts = 0;
+  }
 
  protected:
   void calibrate_(const Inputs &in, float dt_h) {
@@ -144,27 +161,49 @@ class DeficitModel {
     s.window_h += dt_h;
     s.window_kh += (in.room - in.outside) * dt_h;
     s.window_heat_kwh += this->heat_kw * dt_h;
-    if (s.window_h < this->params.calibration_h)
+    if (s.window_h < this->params.calibration_h / 3)
       return;
-    // Every window counts: the heat the floor stored (room warmer at the end) or gave back is taken out with k.
-    // Only when the data was complete, the room moved less than 2 K, and it was cold enough outside for the numbers
-    // to mean something.
-    float room_change = in.room - s.window_room_start;
-    bool settled = std::fabs(room_change) < 2.0f;
-    bool complete = s.window_invalid_h < 0.1f * s.window_h;
-    bool cold_enough = s.window_kh > 5.0f * s.window_h;  // on average at least 5 K between room and outside
-    if (settled && complete && cold_enough && s.window_heat_kwh > 0) {
-      float measured = (s.window_heat_kwh - this->params.room_gain_kwh_k * room_change) * 1000.0f / s.window_kh;
-      if (measured > 20.0f && measured < 400.0f) {
-        s.ua_w_k = 0.5f * s.ua_w_k + 0.5f * measured;  // smoothed: one odd window moves it half way only
-        s.calibrations++;
-      }
+    // This third is finished: keep it with the two before
+    for (int i = 2; i > 0; i--) {
+      s.part_h[i] = s.part_h[i - 1];
+      s.part_heat_kwh[i] = s.part_heat_kwh[i - 1];
+      s.part_kh[i] = s.part_kh[i - 1];
+      s.part_room_start[i] = s.part_room_start[i - 1];
+      s.part_invalid_h[i] = s.part_invalid_h[i - 1];
     }
+    s.part_h[0] = s.window_h;
+    s.part_heat_kwh[0] = s.window_heat_kwh;
+    s.part_kh[0] = s.window_kh;
+    s.part_room_start[0] = s.window_room_start;
+    s.part_invalid_h[0] = s.window_invalid_h;
+    if (s.parts < 3)
+      s.parts++;
     s.window_h = 0;
     s.window_kh = 0;
     s.window_heat_kwh = 0;
     s.window_invalid_h = 0;
     s.window_room_start = in.room;
+    if (s.parts < 3)
+      return;
+    float h = s.part_h[0] + s.part_h[1] + s.part_h[2];
+    float heat = s.part_heat_kwh[0] + s.part_heat_kwh[1] + s.part_heat_kwh[2];
+    float kh = s.part_kh[0] + s.part_kh[1] + s.part_kh[2];
+    float invalid = s.part_invalid_h[0] + s.part_invalid_h[1] + s.part_invalid_h[2];
+    // Every window counts: the heat the floor stored (room warmer at the end) or gave back is taken out with k.
+    // Only when the data was complete, the room moved less than 2 K, and it was cold enough outside for the numbers
+    // to mean something.
+    float room_change = in.room - s.part_room_start[2];
+    bool settled = std::fabs(room_change) < 2.0f;
+    bool complete = invalid < 0.1f * h;
+    bool cold_enough = kh > 5.0f * h;  // on average at least 5 K between room and outside
+    if (settled && complete && cold_enough && heat > 0) {
+      float measured = (heat - this->params.room_gain_kwh_k * room_change) * 1000.0f / kh;
+      if (measured > 20.0f && measured < 400.0f) {
+        // Windows a day apart share two thirds of their data, so each moves UA by a third only
+        s.ua_w_k = s.ua_w_k * 2 / 3 + measured / 3;
+        s.calibrations++;
+      }
+    }
   }
 };
 

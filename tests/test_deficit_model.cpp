@@ -70,7 +70,7 @@ int main() {
     float lo, hi;
     simulate(m, h, 3.0f, 24 * 30, starts, lo, hi);
     printf("UA learned: %.0f W/K (true 90) after %u calibrations\n", m.state.ua_w_k, (unsigned) m.state.calibrations);
-    assert(m.state.calibrations >= 5);
+    assert(m.state.calibrations >= 15);
     assert(std::fabs(m.state.ua_w_k - 90) < 15);
   }
   // With gains (the house of 20-24 Oct 2026: 93 W/K, 0.35 kW from the household, 10 C outside) UA settles on the
@@ -84,8 +84,23 @@ int main() {
     simulate(m, h, 1.5f, 24 * 21, starts, lo, hi);
     printf("UA with gains: %.0f W/K (effective 63) after %u calibrations, %d starts in 21 days, room %.2f..%.2f\n",
            m.state.ua_w_k, (unsigned) m.state.calibrations, starts, lo, hi);
-    assert(m.state.calibrations >= 5);
+    assert(m.state.calibrations >= 15);
     assert(std::fabs(m.state.ua_w_k - 63) < 6);
+  }
+  // The window slides: one calibration a day once three days are in; setting UA by hand starts over
+  {
+    DeficitModel m;
+    House h{93, 14, 21.5f, 10, 0.35f};
+    int starts;
+    float lo, hi;
+    simulate(m, h, 1.5f, 73, starts, lo, hi);  // a few minutes over: the steps add up to slightly less
+    assert(m.state.calibrations == 1);
+    simulate(m, h, 1.5f, 24, starts, lo, hi);
+    assert(m.state.calibrations == 2);
+    m.clear_window();
+    simulate(m, h, 1.5f, 48, starts, lo, hi);
+    assert(m.state.calibrations == 2);
+    printf("sliding window ok\n");
   }
   // No values: no switching decision
   {

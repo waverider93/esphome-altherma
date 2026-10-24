@@ -60,17 +60,21 @@ the start threshold of 3 kWh after 2 h. With 2.5 kW from the heat pump the defic
 
 ## Self-calibration
 
-Over a window of 72 h: UA measured = (heat delivered - k x room change) / sum of (room - outside) x hours. The
+Over a window of 72 h, moved on every 24 h (each day looks back over the last three): UA measured = (heat delivered - k x room change) / sum of (room - outside) x hours. The
 k x room change is the heat the floor stored (room warmer at the end) or gave back, so every window counts, not only
 those that end as warm as they started. It counts when the room moved less than 2 K, the values were there for 90 % of
-the time, and it was on average at least 5 K colder outside than inside. The new UA is 50 % old + 50 % measured,
-between 20 and 400 W/K.
+the time, and it was on average at least 5 K colder outside than inside. Windows a day apart share two thirds of their
+data, so the new UA is 2/3 old + 1/3 measured, between 20 and 400 W/K: after a change it is half way there in about
+two days and nearly there in a week. The first calibration comes after 72 h.
+
+Why the storage term matters: when the room moves 1.75 K over a window (as it did on 23-24 October), leaving it out
+puts UA about 30 W/K off; with k off by 3 kWh/K it is about 6 W/K.
 
 The learned UA is the effective one: the heat the heat pump has to deliver per kelvin. Appliances, people and sun
 heat the house too, and the room temperature shows it, so on average they are inside. In the house this was built
 for (20-24 October 2026) the windows gave 54-58 W/K with k = 14 kWh/K, while the building itself loses about 93 W/K:
 about a third came from the household electricity. When that changes (holidays, winter), UA follows within a few
-windows.
+days.
 
 UA, the deficit and the running window are saved in flash every 10 minutes. After a power cut the controller goes on
 at once with the last UA: there is no gap in heating, the calibration only refines. Setting UA by hand starts a new
