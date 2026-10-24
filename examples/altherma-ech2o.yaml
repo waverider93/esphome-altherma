@@ -233,7 +233,7 @@ altherma_control:
   compressor_frequency: compressor  # run and pause count real compressor time
   heat_request: heat_relay
   cool_request: cool_relay
-  ua: 90               # start value in W/K; learned from then on, kept in flash
+  ua: 60               # start value in W/K (effective: gains inside); learned from then on, kept in flash
   room_low: 0.5        # room below setpoint - 0.5 K: on at once
   room_high: 1.0       # room above setpoint + 1 K: off at once
   diagram_id: altherma # shows the controller with an explanation on /altherma/

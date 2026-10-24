@@ -47,8 +47,8 @@ deficit += k x setpoint change                                   at once, when t
 | room, setpoint | Madoka: Indoor ambient temp. (R1T), RT setpoint |
 | outside | R1T-Outdoor air temp. |
 | heat delivered | flow x 4.18 x (leaving R2T - inlet R4T) / 60 kW; 0 while the 3-way valve is on hot water |
-| UA | learned (start value 90 W/K) |
-| k (room gain) | setting, 5 kWh/K |
+| UA | learned (start value 60 W/K) |
+| k (room gain) | setting, 14 kWh/K: the heat the floor stores per kelvin of room |
 
 The room anchor keeps model errors from adding up: if the room stays too warm, the deficit shrinks bit by bit, and
 the other way round. Sun, appliances and the fireplace are not measured; on average they are inside the learned UA,
@@ -60,10 +60,17 @@ the start threshold of 3 kWh after 2 h. With 2.5 kW from the heat pump the defic
 
 ## Self-calibration
 
-Over a window of 72 h: UA measured = heat delivered / sum of (room - outside) x hours. It counts only when the room
-ends the window within 0.3 K of where it started (the floor stored nothing on balance), the values were there for
-90 % of the time, and it was on average at least 5 K colder outside than inside. The new UA is 70 % old + 30 %
-measured, between 20 and 400 W/K.
+Over a window of 72 h: UA measured = (heat delivered - k x room change) / sum of (room - outside) x hours. The
+k x room change is the heat the floor stored (room warmer at the end) or gave back, so every window counts, not only
+those that end as warm as they started. It counts when the room moved less than 2 K, the values were there for 90 % of
+the time, and it was on average at least 5 K colder outside than inside. The new UA is 50 % old + 50 % measured,
+between 20 and 400 W/K.
+
+The learned UA is the effective one: the heat the heat pump has to deliver per kelvin. Appliances, people and sun
+heat the house too, and the room temperature shows it, so on average they are inside. In the house this was built
+for (20-24 October 2026) the windows gave 54-58 W/K with k = 14 kWh/K, while the building itself loses about 93 W/K:
+about a third came from the household electricity. When that changes (holidays, winter), UA follows within a few
+windows.
 
 UA, the deficit and the running window are saved in flash every 10 minutes. After a power cut the controller goes on
 at once with the last UA: there is no gap in heating, the calibration only refines. Setting UA by hand starts a new
@@ -77,7 +84,7 @@ window from that value.
 | Stop | deficit <= 0 kWh, after the minimum run time |
 | Minimum run time | 2 h |
 | Minimum pause | 1 h |
-| Room gain k | 5 kWh/K |
+| Room gain k | 14 kWh/K |
 | Room too cold | room < setpoint - 0.5 K: on at once (`room_low` in the YAML); the deficit is raised to k x (setpoint - room) |
 | Room too warm | room > setpoint + 1 K: off at once, even within the minimum run time (`room_high`); an open deficit is dropped to k x (setpoint - room) |
 | Heat pump stopped itself | compressor off for 5 min during the request and deficit < start: request off, the pause starts |

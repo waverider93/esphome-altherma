@@ -3,7 +3,8 @@
 // Plain C++ without ESPHome, so it can be tested on the host (tests/test_deficit_model.cpp).
 //
 // Every step: deficit += (UA x (room - outside) - heat delivered) x dt, pulled slowly towards k x (setpoint - room).
-// UA learns itself from the heat delivered over a few days ("effective" UA: average gains are inside).
+// UA learns itself from the heat delivered over a few days ("effective" UA: average gains are inside), with the heat
+// the floor stored or gave back over the window (k x room change) taken out.
 
 #include <cmath>
 #include <cstdint>
@@ -16,7 +17,7 @@ struct Params {
   float stop_kwh{0.0f};       // stop at this deficit (after the minimum run time)
   float min_run_h{2.0f};
   float min_pause_h{1.0f};
-  float room_gain_kwh_k{5.0f};  // k: deficit target per kelvin below the setpoint
+  float room_gain_kwh_k{14.0f};  // k: heat the floor stores per kelvin of room; deficit target per kelvin below setpoint
   float anchor_h{12.0f};        // time constant of the pull towards the target
   float room_low_k{0.5f};       // room below setpoint - this: on at once
   float room_high_k{1.0f};      // room above setpoint + this: off at once
@@ -26,7 +27,7 @@ struct Params {
 // Everything that must survive a reboot
 struct State {
   uint32_t version{2};
-  float ua_w_k{90.0f};
+  float ua_w_k{60.0f};
   float deficit_kwh{0.0f};
   float last_setpoint{NAN};
   // calibration window
@@ -145,15 +146,17 @@ class DeficitModel {
     s.window_heat_kwh += this->heat_kw * dt_h;
     if (s.window_h < this->params.calibration_h)
       return;
-    // Only when the room ends as warm as it started (the floor stored nothing on balance), the data was complete,
-    // and it was cold enough outside for the numbers to mean something
-    bool same_room = std::fabs(in.room - s.window_room_start) < 0.3f;
+    // Every window counts: the heat the floor stored (room warmer at the end) or gave back is taken out with k.
+    // Only when the data was complete, the room moved less than 2 K, and it was cold enough outside for the numbers
+    // to mean something.
+    float room_change = in.room - s.window_room_start;
+    bool settled = std::fabs(room_change) < 2.0f;
     bool complete = s.window_invalid_h < 0.1f * s.window_h;
     bool cold_enough = s.window_kh > 5.0f * s.window_h;  // on average at least 5 K between room and outside
-    if (same_room && complete && cold_enough && s.window_heat_kwh > 0) {
-      float measured = s.window_heat_kwh * 1000.0f / s.window_kh;
+    if (settled && complete && cold_enough && s.window_heat_kwh > 0) {
+      float measured = (s.window_heat_kwh - this->params.room_gain_kwh_k * room_change) * 1000.0f / s.window_kh;
       if (measured > 20.0f && measured < 400.0f) {
-        s.ua_w_k = 0.7f * s.ua_w_k + 0.3f * measured;  // smoothed: one odd window moves it a little only
+        s.ua_w_k = 0.5f * s.ua_w_k + 0.5f * measured;  // smoothed: one odd window moves it half way only
         s.calibrations++;
       }
     }

@@ -10,6 +10,7 @@ using namespace esphome::altherma_control;
 // A simple house: UA_true W/K, C kWh/K, heated by the heat pump at power kW while the request is on
 struct House {
   float ua, c, room, outside;
+  float gains_kw{0};  // appliances, people: heat the controller does not see
 };
 
 static int simulate(DeficitModel &m, House &h, float power, int hours, int &starts, float &min_room, float &max_room) {
@@ -38,7 +39,7 @@ static int simulate(DeficitModel &m, House &h, float power, int hours, int &star
       on_h = 0;
     }
     on_h += dt;
-    h.room += (heat - h.ua * (h.room - h.outside) / 1000) * dt / h.c;
+    h.room += (heat + h.gains_kw - h.ua * (h.room - h.outside) / 1000) * dt / h.c;
     if (i > 24 * 60) {  // after settling
       min_room = std::fmin(min_room, h.room);
       max_room = std::fmax(max_room, h.room);
@@ -71,6 +72,20 @@ int main() {
     printf("UA learned: %.0f W/K (true 90) after %u calibrations\n", m.state.ua_w_k, (unsigned) m.state.calibrations);
     assert(m.state.calibrations >= 5);
     assert(std::fabs(m.state.ua_w_k - 90) < 15);
+  }
+  // With gains (the house of 20-24 Oct 2026: 93 W/K, 0.35 kW from the household, 10 C outside) UA settles on the
+  // effective value, 93 - 350 / 11.5 = 63 W/K, from a start value that is too high
+  {
+    DeficitModel m;
+    m.state.ua_w_k = 96;
+    House h{93, 14, 21.5f, 10, 0.35f};
+    int starts;
+    float lo, hi;
+    simulate(m, h, 1.5f, 24 * 21, starts, lo, hi);
+    printf("UA with gains: %.0f W/K (effective 63) after %u calibrations, %d starts in 21 days, room %.2f..%.2f\n",
+           m.state.ua_w_k, (unsigned) m.state.calibrations, starts, lo, hi);
+    assert(m.state.calibrations >= 5);
+    assert(std::fabs(m.state.ua_w_k - 63) < 6);
   }
   // No values: no switching decision
   {
