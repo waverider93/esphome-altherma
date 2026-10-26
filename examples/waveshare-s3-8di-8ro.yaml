@@ -72,7 +72,7 @@ web_server:
       name: Regler (Schatten)
       sorting_weight: 30
     - id: grp_relays
-      name: Relais (Test, nichts angeschlossen)
+      name: Relais
       sorting_weight: 35
     - id: grp_board
       name: Controller
@@ -285,49 +285,49 @@ switch:
   # Test relays, switched by hand only (see "Relays: test" below)
   - platform: gpio
     id: relay1
-    name: Relais 1 (Heizen H, Test)
+    name: Relais 1 (Heizen H)
     pin: {pca9554: relays, number: 0, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay2
-    name: Relais 2 (Kühlen C, Test)
+    name: Relais 2 (Kühlen C)
     pin: {pca9554: relays, number: 1, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay3
-    name: Relais 3 (Smart Grid 1, Test)
+    name: Relais 3 (Smart Grid 1)
     pin: {pca9554: relays, number: 2, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay4
-    name: Relais 4 (Smart Grid 2, Test)
+    name: Relais 4 (Smart Grid 2)
     pin: {pca9554: relays, number: 3, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay5
-    name: Relais 5 (Sicherheit, Test)
+    name: Relais 5 (Sicherheit)
     pin: {pca9554: relays, number: 4, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay6
-    name: Relais 6 (Test)
+    name: Relais 6
     pin: {pca9554: relays, number: 5, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay7
-    name: Relais 7 (Test)
+    name: Relais 7
     pin: {pca9554: relays, number: 6, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
   - platform: gpio
     id: relay8
-    name: Relais 8 (Test)
+    name: Relais 8
     pin: {pca9554: relays, number: 7, mode: {output: true}}
     restore_mode: ALWAYS_OFF
     web_server: {sorting_group_id: grp_relays}
