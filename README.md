@@ -9,11 +9,16 @@ any ESP32 board, and own logic on the board (relays, fallback, control).
 
 > Status: work in progress. The code compiles for ESP32 (ESP-IDF). It has **not yet run on a heat pump**.
 
+> **Safety.** This project switches the heating of a house. Use it at your own risk (see the License): it is not
+> made or supported by Daikin, and connecting anything to the unit may affect its warranty. Switch the heat pump off
+> at the breaker before opening it. Work on the 230 V side (thermostat terminals X12M) belongs to a qualified
+> electrician. Read-only use (X10A only, no relays) changes nothing on the heat pump.
+
 ## Usage
 
 ```yaml
 external_components:
-  - source: {type: local, path: components}   # later: github://<user>/esphome-altherma
+  - source: github://waverider93/esphome-altherma@main   # or {type: local, path: components}
 
 uart:
   id: x10a_uart
