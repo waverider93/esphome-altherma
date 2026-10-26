@@ -1,8 +1,9 @@
 # Daikin Altherma 3 R ECH2O (EHSX04P50EF + ERGA04EV) on an ESP32 with relay board.
 # X10A: ESP RX <- X10A pin 2 (TX), ESP TX -> X10A pin 3 (RX), GND <- X10A pin 5. See README.
 #
-# Relay pins are placeholders for an ESP32 board with 4 or 8 relays (LC-Relay-ESP32-4R-A2: probably 32/33/25/26).
-# Check them on the board before wiring anything. The relays switch nothing until they are wired, and the heat pump
+# Full example with relays and the controller switching (stage 3), for a classic ESP32 board with relays on GPIOs.
+# The relay pins are examples: check them on your board before wiring anything. For the Waveshare
+# ESP32-S3-ETH-8DI-8RO see examples/waveshare-s3-8di-8ro.yaml. The relays switch nothing until they are wired, and the heat pump
 # only reacts to them after the field settings in README (Relays).
 
 substitutions:

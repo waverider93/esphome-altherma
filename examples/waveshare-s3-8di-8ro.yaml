@@ -206,6 +206,11 @@ binary_sensor:
     name: SG-Kontakt 2
     web_server: {sorting_group_id: grp_state}
   - platform: template
+    name: Regler würde heizen
+    icon: mdi:radiator
+    lambda: return id(shadow_heat_request).state;
+    web_server: {sorting_group_id: grp_control}
+  - platform: template
     name: X10A verbunden
     lambda: return id(altherma).is_connected();
     entity_category: diagnostic
@@ -241,7 +246,7 @@ text_sensor:
 
 # --- Controller in shadow mode ---
 # It calculates deficit, learned UA and its decisions like later, but switches only this virtual heat request.
-# Compare "Regler Heizanforderung (Schatten)" with what the Madoka does. Stage 3 (real relays on the TCA9554,
+# Compare "Regler würde heizen" with what the Madoka does. Stage 3 (real relays on the TCA9554,
 # field settings [C-07]=1, [C-05]=1, [D-01]=3) comes from examples/altherma-ech2o.yaml after the shadow run.
 altherma_control:
   id: control
@@ -268,13 +273,12 @@ number:
   - {platform: altherma_control, type: ua, name: Regler UA, web_server: {sorting_group_id: grp_control}}
 
 switch:
-  # Virtual: no pin behind it
+  # Virtual: no pin behind it. Internal, so it cannot be switched from Home Assistant; shown below as a sensor.
   - platform: template
     id: shadow_heat_request
-    name: Regler Heizanforderung (Schatten)
+    internal: true
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
-    web_server: {sorting_group_id: grp_control}
 
 # Status LED of the board: green = X10A connected, red = no answer from the heat pump
 light:

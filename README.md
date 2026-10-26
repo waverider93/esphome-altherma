@@ -7,7 +7,7 @@ protocol, the value conversions and the model definition files come from there.
 Why ESPHome: native Home Assistant API, the local web dashboard of ESPHome (usable without Home Assistant),
 any ESP32 board, and own logic on the board (relays, fallback, control).
 
-> Status: work in progress. The code compiles for ESP32 (ESP-IDF). It has **not yet run on a heat pump**.
+> Status: work in progress. The code compiles for ESP32 and ESP32-S3 (ESP-IDF). It has **not yet run on a heat pump**.
 
 > **Safety.** This project switches the heating of a house. Use it at your own risk (see the License): it is not
 > made or supported by Daikin, and connecting anything to the unit may affect its warranty. Switch the heat pump off
@@ -141,7 +141,18 @@ X10A (5 pins, JST EH 2.5 mm), as documented by ESPAltherma:
 | 4 | not connected |
 | 5 GND | GND |
 
+The X10A uses 5 V levels, the ESP32 3.3 V. Many run it without a level shifter (so did ESPAltherma), but it is
+outside the ESP32's ratings: a 1 kΩ / 2 kΩ divider on the ESP's RX pin (X10A TX through 1 kΩ to RX, 2 kΩ from RX to
+GND) keeps it within. The line from the ESP's TX to the X10A needs nothing.
+
 ROTEX units have an 8-pin X10A with a different layout, see the ESPAltherma README.
+
+Examples:
+
+| File | Board | What it does |
+| --- | --- | --- |
+| [examples/waveshare-s3-8di-8ro.yaml](examples/waveshare-s3-8di-8ro.yaml) | Waveshare ESP32-S3-ETH-8DI-8RO (POE) | Read only, X10A on the pin header (GPIO1/2), WiFi; controller in shadow mode. RS485, Ethernet and relays prepared as comments. |
+| [examples/altherma-ech2o.yaml](examples/altherma-ech2o.yaml) | ESP32 DevKit with GPIO relays | Everything: relays, controller switching, Smart Grid, fallback. |
 
 ## Differences to ESPAltherma
 
