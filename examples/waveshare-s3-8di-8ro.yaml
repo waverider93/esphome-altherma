@@ -1,6 +1,6 @@
 # Daikin Altherma 3 R ECH2O (EHSX04P50EF + ERGA04EV) on a Waveshare ESP32-S3-ETH-8DI-8RO (POE).
-# Stage 1: read only. X10A on the pin header, WiFi. No relay is defined, so nothing on the board can switch;
-# the controller calculates in shadow mode on a virtual heat request.
+# Stage 1: read only. X10A on the pin header, WiFi. The controller calculates in shadow mode on a virtual heat
+# request. The eight relays can be switched by hand for a test, with NOTHING wired to them (see "Relays: test").
 #
 # Board (ESP32-S3-WROOM-1U-N16R8): W5500 on GPIO12-16, DI1-8 on GPIO4-11, I2C GPIO41/42 with the TCA9554 relay
 # expander (0x20, relay 1-8 = pin 0-7), RS485 on GPIO17/18, WS2812 GPIO38, buzzer GPIO46. Free on the header:
@@ -71,6 +71,9 @@ web_server:
     - id: grp_control
       name: Regler (Schatten)
       sorting_weight: 30
+    - id: grp_relays
+      name: Relais (Test, nichts angeschlossen)
+      sorting_weight: 35
     - id: grp_board
       name: Controller
       sorting_weight: 40
@@ -279,6 +282,68 @@ switch:
     internal: true
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
+  # Test relays, switched by hand only (see "Relays: test" below)
+  - platform: gpio
+    id: relay1
+    name: Relais 1 (Heizen H, Test)
+    pin: {pca9554: relays, number: 0, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay2
+    name: Relais 2 (Kühlen C, Test)
+    pin: {pca9554: relays, number: 1, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay3
+    name: Relais 3 (Smart Grid 1, Test)
+    pin: {pca9554: relays, number: 2, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay4
+    name: Relais 4 (Smart Grid 2, Test)
+    pin: {pca9554: relays, number: 3, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay5
+    name: Relais 5 (Sicherheit, Test)
+    pin: {pca9554: relays, number: 4, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay6
+    name: Relais 6 (Test)
+    pin: {pca9554: relays, number: 5, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay7
+    name: Relais 7 (Test)
+    pin: {pca9554: relays, number: 6, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+  - platform: gpio
+    id: relay8
+    name: Relais 8 (Test)
+    pin: {pca9554: relays, number: 7, mode: {output: true}}
+    restore_mode: ALWAYS_OFF
+    web_server: {sorting_group_id: grp_relays}
+
+# --- Relays: test ---
+# The eight relays switched by hand from Home Assistant or the web page, to try the board. Nothing is wired to them
+# and nothing in this file switches them. Remove it and the test switches before wiring anything to the heat pump: stage 3 binds
+# relays to the controller with fail-safe contacts instead (planned use in the names).
+i2c:
+  sda: GPIO42
+  scl: GPIO41
+  frequency: 100kHz
+
+pca9554:
+  - id: relays
+    address: 0x20
 
 # Status LED of the board: green = X10A connected, red = no answer from the heat pump
 light:
@@ -316,11 +381,5 @@ interval:
 #   cs_pin: GPIO16
 #   interrupt_pin: GPIO12
 #
-# Relays (stage 3, only with the shadow run done):
-# i2c:
-#   sda: GPIO42
-#   scl: GPIO41
-# pca9554:
-#   - id: relays
-#     address: 0x20
-# and pins like  {pca9554: relays, number: 0, mode: {output: true}}  for relay 1.
+# Relays (stage 3, only with the shadow run done): the test switches above are replaced by relays bound to the
+# controller, as in examples/altherma-ech2o.yaml (heat on a normally closed contact, inverted).
