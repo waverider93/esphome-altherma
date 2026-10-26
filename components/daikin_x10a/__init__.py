@@ -3,6 +3,8 @@
 Port of ESPAltherma (https://github.com/raomin/ESPAltherma, MIT License, Copyright (c) 2020 Raomin).
 """
 
+from pathlib import Path
+
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome.components import uart
@@ -21,6 +23,7 @@ CONF_LANGUAGE = "language"
 CONF_DETECT = "detect"
 CONF_LAYOUT_CHECK = "layout_check"
 CONF_DIAGRAM = "diagram"
+CONF_DIAGRAM_LINK = "diagram_link"
 CONF_PROTOCOL = "protocol"
 CONF_REFRIGERANT = "refrigerant"
 CONF_LOG_RAW = "log_raw"
@@ -70,6 +73,8 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_LAYOUT_CHECK, default=True): cv.boolean,
             # Serves a drawing of the installation on /altherma (needs web_server)
             cv.Optional(CONF_DIAGRAM, default=False): cv.boolean,
+            # A button on the ESPHome web page that opens the drawing (web_server js_include)
+            cv.Optional(CONF_DIAGRAM_LINK, default=True): cv.boolean,
             # Only for raw register values without a model; a model sets the protocol itself
             cv.Optional(CONF_PROTOCOL, default="I"): cv.one_of("I", "S", upper=True),
             cv.Optional(CONF_REFRIGERANT, default="AUTO"): cv.enum(REFRIGERANTS, upper=True),
@@ -90,8 +95,13 @@ def _final_validate_hub(config):
     )(config)
     import esphome.final_validate as fv
 
-    if config[CONF_DIAGRAM] and "web_server_base" not in fv.full_config.get():
+    full = fv.full_config.get()
+    if config[CONF_DIAGRAM] and "web_server_base" not in full:
         raise cv.Invalid("diagram: true needs web_server (or another component serving web pages)")
+    web_server = full.get("web_server")
+    if config[CONF_DIAGRAM] and config[CONF_DIAGRAM_LINK] and web_server is not None:
+        # The web server takes one script only; one set in the YAML wins
+        web_server.setdefault("js_include", str(Path(__file__).parent / "diagram_link.js"))
     return config
 
 

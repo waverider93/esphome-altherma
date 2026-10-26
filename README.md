@@ -66,6 +66,7 @@ Options of `daikin_x10a`:
 | `layout_check` | `true` | Compares the replies with the layouts of other models and corrects registers that clearly do not match (stored in flash). |
 | `language` | `en` | Default entity names and the diagram page: `en`, `de`, `fr`, `it`, `es`. |
 | `diagram` | `false` | Serves the drawing of the installation on `/altherma/` and its values on `/altherma/values.json`. Needs `web_server`. |
+| `diagram_link` | `true` | With `diagram`: a button on the ESPHome web page that opens the drawing (uses `web_server: js_include`; one set in the YAML wins). |
 | `refrigerant` | `auto` | For pressure to temperature conversions; `auto` takes it from the model. |
 | `protocol` | `I` | Only for raw values without a known model. |
 | `log_raw` | `false` | Logs every reply as hex. |
