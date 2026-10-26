@@ -76,6 +76,22 @@ For an image built elsewhere (`firmware.factory.bin`, or the "Factory format" do
 `erase-flash` also deletes what the ESP keeps in flash: the learned UA, the deficit and the controller settings.
 Leave it out for an update.
 
+`--chip esp32` is for classic ESP32 boards; the Waveshare ESP32-S3 board needs `--chip esp32s3`.
+
+## Waveshare ESP32-S3-ETH-8DI-8RO
+
+[examples/waveshare-s3-8di-8ro.yaml](../examples/waveshare-s3-8di-8ro.yaml), stage 1: read only, X10A on the pin
+header, WiFi, no relays defined.
+
+* **First flash over USB-C.** If no port shows up or flashing hangs: hold BOOT, press and release RESET, then
+  release BOOT (download mode). Press RESET once after flashing.
+* **Power:** USB-C (5 V) on the desk, 7–36 V on the screw terminal (or POE on the POE version) in the cabinet.
+* **X10A wiring:** see the head of the YAML. Only GND, TX and RX; X10A pin 1 (5 V) stays free, the X10A TX
+  (5 V levels) goes through a level shifter or a 1k/2k divider to GPIO2.
+* **Status LED:** green = the heat pump answers, red = no answer.
+* **Later:** RS485 (GPIO17/18) and Ethernet (W5500) are prepared as comments at the end of the YAML. ESPHome runs
+  WiFi or Ethernet, not both.
+
 ## Trying it without the heat pump
 
 The ESP runs without X10A: the log says "no heat pump answered" once a minute, the values stay empty and the

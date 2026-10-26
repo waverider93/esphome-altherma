@@ -1,0 +1,322 @@
+# Daikin Altherma 3 R ECH2O (EHSX04P50EF + ERGA04EV) on a Waveshare ESP32-S3-ETH-8DI-8RO (POE).
+# Stage 1: read only. X10A on the pin header, WiFi. No relay is defined, so nothing on the board can switch;
+# the controller calculates in shadow mode on a virtual heat request.
+#
+# Board (ESP32-S3-WROOM-1U-N16R8): W5500 on GPIO12-16, DI1-8 on GPIO4-11, I2C GPIO41/42 with the TCA9554 relay
+# expander (0x20, relay 1-8 = pin 0-7), RS485 on GPIO17/18, WS2812 GPIO38, buzzer GPIO46. Free on the header:
+# GPIO1, 2, 3, 21 (GPIO3 is a strapping pin, so it is not used here).
+#
+# X10A (5 pins, pin 1 at the marked end):  1 = 5 V  2 = TX  3 = RX  4 = -  5 = GND
+#   X10A pin 2 (TX)  -> ESP GPIO2 (RX)   through a level shifter or 1k/2k divider: the X10A has 5 V levels
+#   X10A pin 3 (RX)  <- ESP GPIO1 (TX)   3.3 V is enough for the heat pump
+#   X10A pin 5 (GND) -- ESP GND
+#   X10A pin 1 (5 V) stays free: the board has its own supply (USB-C or 7-36 V)
+#
+# Later (stage 2): X10A over RS485 (GPIO17/18) and Ethernet: see the commented blocks at the end.
+
+substitutions:
+  name: altherma
+  x10a_rx: GPIO2
+  x10a_tx: GPIO1
+
+esphome:
+  name: ${name}
+  friendly_name: Altherma
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+logger:
+  # USB-C of the board; the X10A uses a hardware UART of its own
+  level: DEBUG
+
+api:
+  # ESPHome reboots after 15 min without Home Assistant by default; the ESP must keep running instead
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+
+# WiFi for now. ESPHome allows WiFi or Ethernet, not both: for Ethernet delete this block and use the one at the end.
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap: {}
+
+# Local dashboard on http://altherma.local, works without Home Assistant
+web_server:
+  version: 3
+  port: 80
+  local: true
+  sorting_groups:
+    - id: grp_temp
+      name: Temperaturen
+      sorting_weight: 10
+    - id: grp_state
+      name: Zustand
+      sorting_weight: 20
+    - id: grp_control
+      name: Regler (Schatten)
+      sorting_weight: 30
+    - id: grp_board
+      name: Controller
+      sorting_weight: 40
+
+uart:
+  id: x10a_uart
+  rx_pin: ${x10a_rx}
+  tx_pin: ${x10a_tx}
+  baud_rate: 9600
+  parity: EVEN
+  stop_bits: 1
+  data_bits: 8
+
+daikin_x10a:
+  id: altherma
+  uart_id: x10a_uart
+  # A fixed model; the survey after boot still checks it and corrects register layouts. "auto" detects it.
+  model: "ERGA E EHSH-X P30-50 E_EF series 04-08kW-ECH2O"
+  language: de        # entity names without name: and the diagram page
+  diagram: true       # drawing of the installation on http://altherma.local/altherma/
+  all_values: true    # every other value of the model too (Home Assistant: diagnostic, a few disabled)
+  update_interval: 30s
+  # true logs every reply as hex, for comparing with ESPAltherma or P1P2
+  log_raw: false
+
+sensor:
+  - platform: daikin_x10a
+    id: room
+    label: "Indoor ambient temp. (R1T)"
+    name: Raumtemperatur Madoka
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    id: room_setpoint
+    label: "RT setpoint"
+    name: Raum Soll
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    id: outside
+    label: "R1T-Outdoor air temp."
+    name: Außentemperatur
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "Leaving water temp. before BUH (R1T)"
+    name: Vorlauf (R1T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    id: leaving_water
+    label: "Leaving water temp. after BUH (R2T)"
+    name: Vorlauf (R2T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    id: inlet_water
+    label: "Inlet water temp.(R4T)"
+    name: Rücklauf (R4T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "DHW tank temp. (R5T)"
+    name: Speicher (R5T)
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "LW setpoint (main)"
+    name: Vorlauf Soll
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    label: "DHW setpoint"
+    name: Warmwasser Soll
+    web_server: {sorting_group_id: grp_temp}
+  - platform: daikin_x10a
+    id: water_flow
+    label: "Flow sensor (l/min)"
+    name: Durchfluss
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    id: compressor
+    label: "INV frequency (rps)"
+    name: Verdichter
+    accuracy_decimals: 0
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "RT Control State (0:thermo off 1:thermo on 2:buffering)"
+    name: Raumregler Zustand
+    accuracy_decimals: 0
+    web_server: {sorting_group_id: grp_state}
+
+  # Controller (altherma_control)
+  - {platform: altherma_control, type: deficit, name: Regler Defizit, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: ua, name: Regler UA gelernt, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: heat_loss, name: Regler Wärmeverlust, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: heat_delivered, name: Regler Heizleistung, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: calibration_left, name: Regler nächste Kalibrierung, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: self_stops, name: Regler Eigenstopps WP, web_server: {sorting_group_id: grp_control}}
+
+  # Controller board
+  - platform: wifi_signal
+    name: WLAN-Signal
+    update_interval: 60s
+    entity_category: diagnostic
+    web_server: {sorting_group_id: grp_board}
+  - platform: uptime
+    name: Laufzeit Controller
+    entity_category: diagnostic
+    web_server: {sorting_group_id: grp_board}
+
+binary_sensor:
+  - platform: daikin_x10a
+    label: "Thermostat ON/OFF"
+    register: 0x60
+    name: Thermostat an
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    id: hot_water_valve
+    label: "3way valve(On:DHW_Off:Space)"
+    name: Warmwasserventil
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Water pump operation"
+    name: Umwälzpumpe
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Defrost Operation"
+    name: Abtauen
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Main RT Heating"
+    name: Thermostateingang Heizen
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "SmartGridContact1"
+    name: SG-Kontakt 1
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "SmartGridContact2"
+    name: SG-Kontakt 2
+    web_server: {sorting_group_id: grp_state}
+  - platform: template
+    name: X10A verbunden
+    lambda: return id(altherma).is_connected();
+    entity_category: diagnostic
+    web_server: {sorting_group_id: grp_state}
+
+text_sensor:
+  - platform: daikin_x10a
+    label: "I/U operation mode"
+    name: Betriebsart
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    label: "Error Code"
+    register: 0x60
+    name: Fehlercode
+    web_server: {sorting_group_id: grp_state}
+  - platform: daikin_x10a
+    info: model
+    name: Modell
+  - platform: daikin_x10a
+    info: detection
+    name: Modellerkennung
+  - platform: daikin_x10a
+    info: layout
+    name: Layout-Korrekturen
+  - platform: altherma_control
+    name: Regler Grund
+    web_server: {sorting_group_id: grp_control}
+  - platform: wifi_info
+    ip_address:
+      name: IP-Adresse
+      entity_category: diagnostic
+      web_server: {sorting_group_id: grp_board}
+
+# --- Controller in shadow mode ---
+# It calculates deficit, learned UA and its decisions like later, but switches only this virtual heat request.
+# Compare "Regler Heizanforderung (Schatten)" with what the Madoka does. Stage 3 (real relays on the TCA9554,
+# field settings [C-07]=1, [C-05]=1, [D-01]=3) comes from examples/altherma-ech2o.yaml after the shadow run.
+altherma_control:
+  id: control
+  room_temperature: room
+  room_setpoint: room_setpoint
+  outside_temperature: outside
+  flow: water_flow
+  leaving_water_temperature: leaving_water
+  inlet_water_temperature: inlet_water
+  hot_water_valve: hot_water_valve
+  compressor_frequency: compressor
+  heat_request: shadow_heat_request
+  ua: 60
+  room_low: 0.5
+  room_high: 1.0
+  diagram_id: altherma
+
+number:
+  - {platform: altherma_control, type: start, name: Regler Start, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: stop, name: Regler Stopp, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: min_run, name: Regler Mindestlaufzeit, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: min_pause, name: Regler Mindestpause, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: room_gain, name: Regler Raumkorrektur, web_server: {sorting_group_id: grp_control}}
+  - {platform: altherma_control, type: ua, name: Regler UA, web_server: {sorting_group_id: grp_control}}
+
+switch:
+  # Virtual: no pin behind it
+  - platform: template
+    id: shadow_heat_request
+    name: Regler Heizanforderung (Schatten)
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    web_server: {sorting_group_id: grp_control}
+
+# Status LED of the board: green = X10A connected, red = no answer from the heat pump
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    name: Status-LED
+    chipset: WS2812
+    channel_colors: RGB
+    pin: GPIO38
+    num_leds: 1
+    internal: true
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          bool ok = id(altherma).is_connected();
+          auto call = id(status_led).turn_on();
+          call.set_brightness(0.2);
+          call.set_rgb(ok ? 0.0 : 1.0, ok ? 1.0 : 0.0, 0.0);
+          call.perform();
+
+# --- Stage 2: RS485 and Ethernet (not active yet) ---
+# X10A over RS485: a TTL-RS485 converter with automatic direction at the heat pump (powered from X10A pin 1 5 V and
+# pin 5 GND), twisted pair to A/B of the board. Then only the pins change:
+#   x10a_rx: GPIO18
+#   x10a_tx: GPIO17
+#
+# Ethernet (POE): delete the wifi: block and the wifi_signal / wifi_info entities, then add
+# ethernet:
+#   type: W5500
+#   clk_pin: GPIO15
+#   mosi_pin: GPIO13
+#   miso_pin: GPIO14
+#   cs_pin: GPIO16
+#   interrupt_pin: GPIO12
+#
+# Relays (stage 3, only with the shadow run done):
+# i2c:
+#   sda: GPIO42
+#   scl: GPIO41
+# pca9554:
+#   - id: relays
+#     address: 0x20
+# and pins like  {pca9554: relays, number: 0, mode: {output: true}}  for relay 1.
