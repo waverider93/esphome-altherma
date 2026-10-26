@@ -9,11 +9,10 @@
 //   device: altherma            # ESPHome device: its X10A entities, as on the ESP page
 //   control: esphome            # the controller card from the device's controller entities (optional)
 //
-// Without the ESP (values from P1P2MQTT, the controller from Home Assistant's shadow controller):
+// Without the ESP, values from a P1P2MQTT bridge (its default entity ids):
 //
 //   type: custom:altherma-card
 //   values: p1p2
-//   control: schattenregler_esp
 //   model: EHSX04P50EF
 //
 // Optional: lang (en, de, fr, it, es; default: Home Assistant's), model (text or entity), connected (entity),
@@ -69,16 +68,6 @@ const CONTROL_PRESETS = {
     compressor: 0, self_stops: `sensor.${d}_regler_eigenstopps_wp`, loss: `sensor.${d}_regler_warmeverlust`, heat: `sensor.${d}_regler_heizleistung`,
     room_low: 0.5, room_high: 1.0,
   }),
-  // Home Assistant's shadow controller with the ESP's logic (homeassistant-configs, waermebilanz_schattenregler_esp.yaml)
-  schattenregler_esp: () => ({
-    title: {en: 'Control (simulated in Home Assistant, switches nothing)', de: 'Regelung (Simulation in Home Assistant, schaltet nichts)'},
-    active: true, request: 'binary_sensor.warmebilanz_schattenregler_esp_heizanforderung', reason: 'sensor.warmebilanz_schattenregler_esp#grund',
-    deficit: 'sensor.warmebilanz_schattenregler_esp', start: 'input_number.warmebilanz_startschwelle', stop: 'input_number.warmebilanz_stoppschwelle',
-    min_run: 2, min_pause: 1, room_gain: 5, ua: 'sensor.warmebilanz_schattenregler_esp#ua_gelernt',
-    calibrations: 'sensor.warmebilanz_schattenregler_esp#kalibrierungen',
-    calibration_left: {entity: 'sensor.warmebilanz_schattenregler_esp#fenster_h', mul: -1, add: 72},
-    room_low: 0.5, room_high: 1.0,
-  }),
 };
 
 const BAD = /^(unavailable|unknown|none)$/i;
@@ -105,7 +94,7 @@ class AlthermaCard extends HTMLElement {
   connectedCallback() { this._last = null; if (this._hass) this._render(); }
   getCardSize() { return 14; }
   getGridOptions() { return {columns: 'full'}; }
-  static getStubConfig() { return {values: 'p1p2', control: 'schattenregler_esp'}; }
+  static getStubConfig() { return {device: 'altherma', control: 'esphome'}; }
 
   _state(id) {
     const [entity, attr] = String(id).split('#');

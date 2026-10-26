@@ -166,6 +166,17 @@ python3 tools/make_compile_test.py                  # the example without WiFi, 
 uv run esphome compile tests/compile-diagram.yaml   # Ethernet, API, diagram, relays, control, all values
 ```
 
+## Thanks
+
+This project stands on [ESPAltherma](https://github.com/raomin/ESPAltherma) by Raomin and its contributors. Years
+of reverse engineering the X10A protocol, the value conversions, the definition files for dozens of models and the
+model detection of the new version are their work; this port only moves it into ESPHome. Thank you for that great
+project, and for sharing it under the MIT License. If ESPAltherma helped you too, consider giving it a star.
+
+No code from [P1P2Serial / P1P2MQTT](https://github.com/Arnold-n/P1P2Serial) (Arnold Niessen) is used here. The
+Home Assistant card can show the values of a P1P2MQTT bridge by its entity ids, and P1P2MQTT is the reference to
+check the X10A values against. Thanks for that project as well.
+
 ## License
 
 MIT, see [LICENSE](LICENSE). Protocol, conversions, catalog, detection, layout correction, tests and the diagram
